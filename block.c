@@ -268,7 +268,7 @@ block_ioctl(struct tcb *tcp, long code, long arg)
 
 	/* No arguments or unhandled */
 	case BLKTRACESTART:
-	case BLKTRACESTOP:
+	//case BLKTRACESTOP:
 	case BLKTRACETEARDOWN:
 	case BLKFLSBUF: /* Requires driver knowlege */
 	case BLKRRPART: /* No args */
