@@ -370,10 +370,10 @@
 	{ 1,	TP,	sys_unshare,		"unshare"	}, /* 337 */
 	{ 2,	0,	sys_set_robust_list,	"set_robust_list" }, /* 338 */
 	{ 3,	0,	sys_get_robust_list,	"get_robust_list" }, /* 339 */
-	{ 6,	TD,	sys_splice,		"splice"	}, /* 340 */
+//	{ 6,	TD,	sys_splice,		"splice"	}, /* 340 */
 	{ 5,	0,	printargs,		"SYS_341"	}, /* 341 */
-	{ 4,	TD,	sys_tee,		"tee"		}, /* 342 */
-	{ 4,	TD,	sys_vmsplice,		"vmsplice"	}, /* 343 */
+//	{ 4,	TD,	sys_tee,		"tee"		}, /* 342 */
+//	{ 4,	TD,	sys_vmsplice,		"vmsplice"	}, /* 343 */
 	{ 6,	0,	sys_move_pages,		"move_pages"	}, /* 344 */
 	{ 3,	0,	sys_getcpu,		"getcpu"	}, /* 345 */
 	{ 5,	TD,	sys_epoll_pwait,	"epoll_pwait"	}, /* 346 */
@@ -391,8 +391,8 @@
 	{ 3,	TD,	sys_dup3,		"dup3"		}, /* 358 */
 	{ 2,	TD,	sys_pipe2,		"pipe2"		}, /* 359 */
 	{ 1,	TD,	sys_inotify_init1,	"inotify_init1"	}, /* 360 */
-	{ 6,	TD,	sys_preadv,		"preadv"	}, /* 361 */
-	{ 6,	TD,	sys_pwritev,		"pwritev"	}, /* 362 */
+//	{ 6,	TD,	sys_preadv,		"preadv"	}, /* 361 */
+//	{ 6,	TD,	sys_pwritev,		"pwritev"	}, /* 362 */
 	{ 4,	TP|TS,	sys_rt_tgsigqueueinfo,	"rt_tgsigqueueinfo"}, /* 363 */
 	{ 5,	TD,	sys_perf_event_open,	"perf_event_open"}, /* 364 */
 	{ 5,	TN,	sys_recvmmsg,		"recvmmsg"	}, /* 365 */
