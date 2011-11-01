@@ -77,36 +77,43 @@ static const struct xlat msgflags[] = {
 
 
 static void
-printstrbuf(struct tcb *tcp, struct strbuf *sbp, int getting)
+printstrbuf(tcp, sbp, getting)
+struct tcb *tcp;
+struct strbuf *sbp;
+int getting;
 {
 	if (sbp->maxlen == -1 && getting)
-		tprints("{maxlen=-1}");
+		tprintf("{maxlen=-1}");
 	else {
-		tprints("{");
+		tprintf("{");
 		if (getting)
 			tprintf("maxlen=%d, ", sbp->maxlen);
 		tprintf("len=%d, buf=", sbp->len);
 		printstr(tcp, (unsigned long) sbp->buf, sbp->len);
-		tprints("}");
+		tprintf("}");
 	}
 }
 
 static void
-printstrbufarg(struct tcb *tcp, int arg, int getting)
+printstrbufarg(tcp, arg, getting)
+struct tcb *tcp;
+int arg;
+int getting;
 {
 	struct strbuf buf;
 
 	if (arg == 0)
-		tprints("NULL");
+		tprintf("NULL");
 	else if (umove(tcp, arg, &buf) < 0)
-		tprints("{...}");
+		tprintf("{...}");
 	else
 		printstrbuf(tcp, &buf, getting);
-	tprints(", ");
+	tprintf(", ");
 }
 
 int
-sys_putmsg(struct tcb *tcp)
+sys_putmsg(tcp)
+struct tcb *tcp;
 {
 	int i;
 
@@ -124,7 +131,8 @@ sys_putmsg(struct tcb *tcp)
 
 #if defined(SPARC) || defined(SPARC64) || defined(SUNOS4) || defined(SVR4)
 int
-sys_getmsg(struct tcb *tcp)
+sys_getmsg(tcp)
+struct tcb *tcp;
 {
 	int i, flags;
 
@@ -142,13 +150,13 @@ sys_getmsg(struct tcb *tcp)
 			printstrbufarg(tcp, tcp->u_arg[i], 1);
 		/* pointer to flags */
 		if (tcp->u_arg[3] == 0)
-			tprints("NULL");
+			tprintf("NULL");
 		else if (umove(tcp, tcp->u_arg[3], &flags) < 0)
-			tprints("[?]");
+			tprintf("[?]");
 		else {
-			tprints("[");
+			tprintf("[");
 			printflags(msgflags, flags, "RS_???");
-			tprints("]");
+			tprintf("]");
 		}
 		/* decode return value */
 		switch (tcp->u_rval) {
@@ -187,7 +195,8 @@ static const struct xlat pmsgflags[] = {
 
 #ifdef SYS_putpmsg
 int
-sys_putpmsg(struct tcb *tcp)
+sys_putpmsg(tcp)
+struct tcb *tcp;
 {
 	int i;
 
@@ -208,7 +217,8 @@ sys_putpmsg(struct tcb *tcp)
 
 #ifdef SYS_getpmsg
 int
-sys_getpmsg(struct tcb *tcp)
+sys_getpmsg(tcp)
+struct tcb *tcp;
 {
 	int i, flags;
 
@@ -226,16 +236,16 @@ sys_getpmsg(struct tcb *tcp)
 			printstrbufarg(tcp, tcp->u_arg[i], 1);
 		/* pointer to band */
 		printnum(tcp, tcp->u_arg[3], "%d");
-		tprints(", ");
+		tprintf(", ");
 		/* pointer to flags */
 		if (tcp->u_arg[4] == 0)
-			tprints("NULL");
+			tprintf("NULL");
 		else if (umove(tcp, tcp->u_arg[4], &flags) < 0)
-			tprints("[?]");
+			tprintf("[?]");
 		else {
-			tprints("[");
+			tprintf("[");
 			printflags(pmsgflags, flags, "MSG_???");
-			tprints("]");
+			tprintf("]");
 		}
 		/* decode return value */
 		switch (tcp->u_rval) {
@@ -311,16 +321,16 @@ decode_poll(struct tcb *tcp, long pts)
 		} else {
 			abbrev_end = end;
 		}
-		tprints("[");
+		tprintf("[");
 		for (cur = start; cur < end; cur += sizeof(fds)) {
 			if (cur > start)
-				tprints(", ");
+				tprintf(", ");
 			if (cur >= abbrev_end) {
-				tprints("...");
+				tprintf("...");
 				break;
 			}
 			if (umoven(tcp, cur, sizeof fds, (char *) &fds) < 0) {
-				tprints("?");
+				tprintf("?");
 				failed = 1;
 				break;
 			}
@@ -328,22 +338,22 @@ decode_poll(struct tcb *tcp, long pts)
 				tprintf("{fd=%d}", fds.fd);
 				continue;
 			}
-			tprints("{fd=");
+			tprintf("{fd=");
 			printfd(tcp, fds.fd);
-			tprints(", events=");
+			tprintf(", events=");
 			printflags(pollflags, fds.events, "POLL???");
-			tprints("}");
+			tprintf("}");
 		}
-		tprints("]");
+		tprintf("]");
 		if (failed)
 			tprintf(" %#lx", start);
 		tprintf(", %d, ", nfds);
 		return 0;
 	} else {
 		static char outstr[1024];
-		char *outptr;
-#define end_outstr (outstr + sizeof(outstr))
+		char str[64];
 		const char *flagstr;
+		unsigned int cumlen;
 
 		if (syserror(tcp))
 			return 0;
@@ -366,56 +376,62 @@ decode_poll(struct tcb *tcp, long pts)
 			abbrev_end = end;
 		}
 
-		outptr = outstr;
+		outstr[0] = '\0';
+		cumlen = 0;
 
 		for (cur = start; cur < end; cur += sizeof(fds)) {
 			if (umoven(tcp, cur, sizeof fds, (char *) &fds) < 0) {
-				if (outptr < end_outstr - 2)
-					*outptr++ = '?';
+				++cumlen;
+				if (cumlen < sizeof(outstr))
+					strcat(outstr, "?");
 				failed = 1;
 				break;
 			}
 			if (!fds.revents)
 				continue;
-			if (outptr == outstr) {
-				*outptr++ = '[';
+			if (!cumlen) {
+				++cumlen;
+				strcat(outstr, "[");
 			} else {
-				if (outptr < end_outstr - 3)
-					outptr = stpcpy(outptr, ", ");
+				cumlen += 2;
+				if (cumlen < sizeof(outstr))
+					strcat(outstr, ", ");
 			}
 			if (cur >= abbrev_end) {
-				if (outptr < end_outstr - 4)
-					outptr = stpcpy(outptr, "...");
+				cumlen += 3;
+				if (cumlen < sizeof(outstr))
+					strcat(outstr, "...");
 				break;
 			}
-			if (outptr < end_outstr - (sizeof("{fd=%d, revents=") + sizeof(int)*3) + 1)
-				outptr += sprintf(outptr, "{fd=%d, revents=", fds.fd);
-			flagstr = sprintflags("", pollflags, fds.revents);
-			if (outptr < end_outstr - (strlen(flagstr) + 2)) {
-				outptr = stpcpy(outptr, flagstr);
-				*outptr++ = '}';
+			sprintf(str, "{fd=%d, revents=", fds.fd);
+			flagstr=sprintflags("", pollflags, fds.revents);
+			cumlen += strlen(str) + strlen(flagstr) + 1;
+			if (cumlen < sizeof(outstr)) {
+				strcat(outstr, str);
+				strcat(outstr, flagstr);
+				strcat(outstr, "}");
 			}
 		}
 		if (failed)
 			return 0;
 
-		if (outptr != outstr /* && outptr < end_outstr - 1 (always true)*/)
-			*outptr++ = ']';
+		if (cumlen && ++cumlen < sizeof(outstr))
+			strcat(outstr, "]");
 
-		*outptr = '\0';
 		if (pts) {
-			if (outptr < end_outstr - 128) {
-				outptr = stpcpy(outptr, outptr == outstr ? "left " : ", left ");
-				sprint_timespec(outptr, tcp, pts);
-			}
+			char str[128];
+
+			sprintf(str, "%sleft ", cumlen ? ", " : "");
+			sprint_timespec(str + strlen(str), tcp, pts);
+			if ((cumlen += strlen(str)) < sizeof(outstr))
+				strcat(outstr, str);
 		}
 
-		if (outptr == outstr)
+		if (!outstr[0])
 			return 0;
 
 		tcp->auxstr = outstr;
 		return RVAL_STR;
-#undef end_outstr
 	}
 }
 
@@ -426,7 +442,7 @@ sys_poll(struct tcb *tcp)
 	if (entering(tcp)) {
 #ifdef INFTIM
 		if (tcp->u_arg[2] == INFTIM)
-			tprints("INFTIM");
+			tprintf("INFTIM");
 		else
 #endif
 			tprintf("%ld", tcp->u_arg[2]);
@@ -441,7 +457,7 @@ sys_ppoll(struct tcb *tcp)
 	int rc = decode_poll(tcp, tcp->u_arg[2]);
 	if (entering(tcp)) {
 		print_timespec(tcp, tcp->u_arg[2]);
-		tprints(", ");
+		tprintf(", ");
 		print_sigset(tcp, tcp->u_arg[3], 0);
 		tprintf(", %lu", tcp->u_arg[4]);
 	}
@@ -451,7 +467,8 @@ sys_ppoll(struct tcb *tcp)
 
 #else /* !HAVE_SYS_POLL_H */
 int
-sys_poll(struct tcb *tcp)
+sys_poll(tcp)
+struct tcb *tcp;
 {
 	return 0;
 }
@@ -554,7 +571,7 @@ static const struct xlat transport_user_options[] = {
 	{ 0,		NULL		},
 };
 
-static const struct xlat transport_user_flags[] = {
+static const struct xlat transport_user_flags [] = {
 	{ 0,		"0"		},
 	{ T_MORE,	"T_MORE"	},
 	{ T_EXPEDITED,	"T_EXPEDITED"	},
@@ -573,12 +590,12 @@ static const struct xlat transport_user_flags[] = {
 
 #ifdef HAVE_STRUCT_T_OPTHDR
 
-static const struct xlat xti_level[] = {
+static const struct xlat xti_level [] = {
 	{ XTI_GENERIC,	"XTI_GENERIC"	},
 	{ 0,		NULL		},
 };
 
-static const struct xlat xti_generic[] = {
+static const struct xlat xti_generic [] = {
 	{ XTI_DEBUG,	"XTI_DEBUG"	},
 	{ XTI_LINGER,	"XTI_LINGER"	},
 	{ XTI_RCVBUF,	"XTI_RCVBUF"	},
@@ -591,7 +608,10 @@ static const struct xlat xti_generic[] = {
 
 
 void
-print_xti_optmgmt(struct tcb *tcp, long addr, int len)
+print_xti_optmgmt (tcp, addr, len)
+struct tcb *tcp;
+long addr;
+int len;
 {
 	int c = 0;
 	struct t_opthdr hdr;
@@ -599,73 +619,76 @@ print_xti_optmgmt(struct tcb *tcp, long addr, int len)
 	while (len >= (int) sizeof hdr) {
 		if (umove(tcp, addr, &hdr) < 0) break;
 		if (c++) {
-			tprints(", ");
+			tprintf (", ");
 		}
 		else if (len > hdr.len + sizeof hdr) {
-			tprints("[");
+			tprintf ("[");
 		}
-		tprints("{level=");
-		printxval(xti_level, hdr.level, "???");
-		tprints(", name=");
+		tprintf ("{level=");
+		printxval (xti_level, hdr.level, "???");
+		tprintf (", name=");
 		switch (hdr.level) {
 		    case XTI_GENERIC:
-			printxval(xti_generic, hdr.name, "XTI_???");
+			printxval (xti_generic, hdr.name, "XTI_???");
 			break;
 		    default:
-			tprintf("%ld", hdr.name);
+			tprintf ("%ld", hdr.name);
 			break;
 		}
-		tprints(", status=");
-		printxval(transport_user_flags, hdr.status, "T_???");
+		tprintf (", status=");
+		printxval (transport_user_flags,  hdr.status, "T_???");
 		addr += sizeof hdr;
 		len -= sizeof hdr;
 		if ((hdr.len -= sizeof hdr) > 0) {
 			if (hdr.len > len) break;
-			tprints(", val=");
-			if (len == sizeof(int))
-				printnum(tcp, addr, "%d");
+			tprintf (", val=");
+			if (len == sizeof (int))
+				printnum (tcp, addr, "%d");
 			else
-				printstr(tcp, addr, hdr.len);
+				printstr (tcp, addr, hdr.len);
 			addr += hdr.len;
 			len -= hdr.len;
 		}
-		tprints("}");
+		tprintf ("}");
 	}
 	if (len > 0) {
-		if (c++) tprints(", ");
-		printstr(tcp, addr, len);
+		if (c++) tprintf (", ");
+		printstr (tcp, addr, len);
 	}
-	if (c > 1) tprints("]");
+	if (c > 1) tprintf ("]");
 }
 
 #endif
 
 
 static void
-print_optmgmt(struct tcb *tcp, long addr, int len)
+print_optmgmt (tcp, addr, len)
+struct tcb *tcp;
+long addr;
+int len;
 {
 	/* We don't know how to tell if TLI (socket) or XTI
 	   optmgmt is being used yet, assume TLI. */
 #if defined (HAVE_STRUCT_OPTHDR)
-	print_sock_optmgmt(tcp, addr, len);
+	print_sock_optmgmt (tcp, addr, len);
 #elif defined (HAVE_STRUCT_T_OPTHDR)
-	print_xti_optmgmt(tcp, addr, len);
+	print_xti_optmgmt (tcp, addr, len);
 #else
-	printstr(tcp, addr, len);
+	printstr (tcp, addr, len);
 #endif
 }
 
 
 
 
-static const struct xlat service_type[] = {
+static const struct xlat service_type [] = {
 	{ T_COTS,	"T_COTS"	},
 	{ T_COTS_ORD,	"T_COTS_ORD"	},
 	{ T_CLTS,	"T_CLTS"	},
 	{ 0,		NULL		},
 };
 
-static const struct xlat ts_state[] = {
+static const struct xlat ts_state [] = {
 	{ TS_UNBND,	"TS_UNBND"	},
 	{ TS_WACK_BREQ,	"TS_WACK_BREQ"	},
 	{ TS_WACK_UREQ,	"TS_WACK_UREQ"	},
@@ -686,7 +709,7 @@ static const struct xlat ts_state[] = {
 	{ 0,		NULL		},
 };
 
-static const struct xlat provider_flags[] = {
+static const struct xlat provider_flags [] = {
 	{ 0,		"0"		},
 	{ SENDZERO,	"SENDZERO"	},
 	{ EXPINLINE,	"EXPINLINE"	},
@@ -695,7 +718,7 @@ static const struct xlat provider_flags[] = {
 };
 
 
-static const struct xlat tli_errors[] = {
+static const struct xlat tli_errors [] = {
 	{ TBADADDR,	"TBADADDR"	},
 	{ TBADOPT,	"TBADOPT"	},
 	{ TACCES,	"TACCES"	},
@@ -730,100 +753,104 @@ static const struct xlat tli_errors[] = {
 
 
 static int
-print_transport_message(struct tcb *tcp, int expect, long addr, int len)
+print_transport_message (tcp, expect, addr, len)
+struct tcb *tcp;
+int expect;
+long addr;
+int len;
 {
 	union T_primitives m;
 	int c = 0;
 
 	if (len < sizeof m.type) goto dump;
 
-	if (umove(tcp, addr, &m.type) < 0) goto dump;
+	if (umove (tcp, addr, &m.type) < 0) goto dump;
 
 #define GET(type, struct)	\
 	do {							\
 		if (len < sizeof m.struct) goto dump;		\
-		if (umove(tcp, addr, &m.struct) < 0) goto dump;	\
-		tprints("{");					\
+		if (umove (tcp, addr, &m.struct) < 0) goto dump;\
+		tprintf ("{");					\
 		if (expect != type) {				\
 			++c;					\
-			tprints(#type);				\
+			tprintf (#type);			\
 		}						\
 	}							\
 	while (0)
 
 #define COMMA() \
-	do { if (c++) tprints(", "); } while (0)
+	do { if (c++) tprintf (", "); } while (0)
 
 
 #define STRUCT(struct, elem, print)					\
 	do {								\
-		COMMA();						\
+		COMMA ();						\
 		if (m.struct.elem##_length < 0 ||			\
 		    m.struct.elem##_offset < sizeof m.struct ||		\
 		    m.struct.elem##_offset + m.struct.elem##_length > len) \
 		{							\
-			tprintf(#elem "_length=%ld, " #elem "_offset=%ld",\
+			tprintf (#elem "_length=%ld, " #elem "_offset=%ld",\
 				m.struct.elem##_length,			\
 				m.struct.elem##_offset);		\
 		}							\
 		else {							\
-			tprints(#elem "=");				\
-			print(tcp,					\
+			tprintf (#elem "=");				\
+			print (tcp,					\
 				 addr + m.struct.elem##_offset,		\
 				 m.struct.elem##_length);		\
 		}							\
 	}								\
 	while (0)
 
-#define ADDR(struct, elem) STRUCT(struct, elem, printstr)
+#define ADDR(struct, elem) STRUCT (struct, elem, printstr)
 
 	switch (m.type) {
 #ifdef T_CONN_REQ
 	    case T_CONN_REQ:	/* connect request   */
-		GET(T_CONN_REQ, conn_req);
-		ADDR(conn_req, DEST);
-		ADDR(conn_req, OPT);
+		GET (T_CONN_REQ, conn_req);
+		ADDR (conn_req, DEST);
+		ADDR (conn_req, OPT);
 		break;
 #endif
 #ifdef T_CONN_RES
 	    case T_CONN_RES:	/* connect response   */
-		GET(T_CONN_RES, conn_res);
+		GET (T_CONN_RES, conn_res);
 #ifdef HAVE_STRUCT_T_CONN_RES_QUEUE_PTR
-		COMMA();
-		tprintf("QUEUE=%p", m.conn_res.QUEUE_ptr);
+		COMMA ();
+		tprintf ("QUEUE=%p", m.conn_res.QUEUE_ptr);
 #elif defined HAVE_STRUCT_T_CONN_RES_ACCEPTOR_ID
-		COMMA();
-		tprintf("ACCEPTOR=%#lx", m.conn_res.ACCEPTOR_id);
+		COMMA ();
+		tprintf ("ACCEPTOR=%#lx", m.conn_res.ACCEPTOR_id);
 #endif
-		ADDR(conn_res, OPT);
-		COMMA();
-		tprintf("SEQ=%ld", m.conn_res.SEQ_number);
+		ADDR (conn_res, OPT);
+		COMMA ();
+		tprintf ("SEQ=%ld", m.conn_res.SEQ_number);
 		break;
 #endif
 #ifdef T_DISCON_REQ
 	    case T_DISCON_REQ:	/* disconnect request */
-		GET(T_DISCON_REQ, discon_req);
-		COMMA();
-		tprintf("SEQ=%ld", m.discon_req.SEQ_number);
+		GET (T_DISCON_REQ, discon_req);
+		COMMA ();
+		tprintf ("SEQ=%ld", m.discon_req.SEQ_number);
 		break;
 #endif
 #ifdef T_DATA_REQ
 	    case T_DATA_REQ:	/* data request       */
-		GET(T_DATA_REQ, data_req);
-		COMMA();
-		tprintf("MORE=%ld", m.data_req.MORE_flag);
+		GET (T_DATA_REQ, data_req);
+		COMMA ();
+		tprintf ("MORE=%ld", m.data_req.MORE_flag);
 		break;
 #endif
 #ifdef T_EXDATA_REQ
 	    case T_EXDATA_REQ:	/* expedited data req */
-		GET(T_EXDATA_REQ, exdata_req);
-		COMMA();
-		tprintf("MORE=%ld", m.exdata_req.MORE_flag);
+		GET (T_EXDATA_REQ, exdata_req);
+		COMMA ();
+		tprintf ("MORE=%ld", m.exdata_req.MORE_flag);
 		break;
 #endif
 #ifdef T_INFO_REQ
 	    case T_INFO_REQ:	/* information req    */
-		GET(T_INFO_REQ, info_req);
+		GET (T_INFO_REQ, info_req);
 		break;
 #endif
 #ifdef T_BIND_REQ
@@ -831,161 +858,161 @@ print_transport_message(struct tcb *tcp, int expect, long addr, int len)
 #ifdef O_T_BIND_REQ
 	    case O_T_BIND_REQ:	/* Ugly xti/tli hack */
 #endif
-		GET(T_BIND_REQ, bind_req);
-		ADDR(bind_req, ADDR);
-		COMMA();
-		tprintf("CONIND=%ld", m.bind_req.CONIND_number);
+		GET (T_BIND_REQ, bind_req);
+		ADDR (bind_req, ADDR);
+		COMMA ();
+		tprintf ("CONIND=%ld", m.bind_req.CONIND_number);
 		break;
 #endif
 #ifdef T_UNBIND_REQ
 	    case T_UNBIND_REQ:	/* unbind request     */
-		GET(T_UNBIND_REQ, unbind_req);
+		GET (T_UNBIND_REQ, unbind_req);
 		break;
 #endif
 #ifdef T_UNITDATA_REQ
 	    case T_UNITDATA_REQ:	/* unitdata requset   */
-		GET(T_UNITDATA_REQ, unitdata_req);
-		ADDR(unitdata_req, DEST);
-		ADDR(unitdata_req, OPT);
+		GET (T_UNITDATA_REQ, unitdata_req);
+		ADDR (unitdata_req, DEST);
+		ADDR (unitdata_req, OPT);
 		break;
 #endif
 #ifdef T_OPTMGMT_REQ
 	    case T_OPTMGMT_REQ:	/* manage opt req     */
-		GET(T_OPTMGMT_REQ, optmgmt_req);
-		COMMA();
-		tprints("MGMT=");
-		printflags(transport_user_flags, m.optmgmt_req.MGMT_flags,
+		GET (T_OPTMGMT_REQ, optmgmt_req);
+		COMMA ();
+		tprintf ("MGMT=");
+		printflags (transport_user_flags, m.optmgmt_req.MGMT_flags,
 			    "T_???");
-		STRUCT(optmgmt_req, OPT, print_optmgmt);
+		STRUCT (optmgmt_req, OPT, print_optmgmt);
 		break;
 #endif
 #ifdef T_ORDREL_REQ
 	    case T_ORDREL_REQ:	/* orderly rel req    */
-		GET(T_ORDREL_REQ, ordrel_req);
+		GET (T_ORDREL_REQ, ordrel_req);
 		break;
 #endif
 #ifdef T_CONN_IND
 	    case T_CONN_IND:	/* connect indication */
-		GET(T_CONN_IND, conn_ind);
-		ADDR(conn_ind, SRC);
-		ADDR(conn_ind, OPT);
-		tprintf(", SEQ=%ld", m.conn_ind.SEQ_number);
+		GET (T_CONN_IND, conn_ind);
+		ADDR (conn_ind, SRC);
+		ADDR (conn_ind, OPT);
+		tprintf (", SEQ=%ld", m.conn_ind.SEQ_number);
 		break;
 #endif
 #ifdef T_CONN_CON
 	    case T_CONN_CON:	/* connect corfirm    */
-		GET(T_CONN_CON, conn_con);
-		ADDR(conn_con, RES);
-		ADDR(conn_con, OPT);
+		GET (T_CONN_CON, conn_con);
+		ADDR (conn_con, RES);
+		ADDR (conn_con, OPT);
 		break;
 #endif
 #ifdef T_DISCON_IND
 	    case T_DISCON_IND:	/* discon indication  */
-		GET(T_DISCON_IND, discon_ind);
-		COMMA();
-		tprintf("DISCON=%ld, SEQ=%ld",
+		GET (T_DISCON_IND, discon_ind);
+		COMMA ();
+		tprintf ("DISCON=%ld, SEQ=%ld",
 			 m.discon_ind.DISCON_reason, m.discon_ind.SEQ_number);
 		break;
 #endif
 #ifdef T_DATA_IND
 	    case T_DATA_IND:	/* data indication    */
-		GET(T_DATA_IND, data_ind);
-		COMMA();
-		tprintf("MORE=%ld", m.data_ind.MORE_flag);
+		GET (T_DATA_IND, data_ind);
+		COMMA ();
+		tprintf ("MORE=%ld", m.data_ind.MORE_flag);
 		break;
 #endif
 #ifdef T_EXDATA_IND
 	    case T_EXDATA_IND:	/* expedited data ind */
-		GET(T_EXDATA_IND, exdata_ind);
-		COMMA();
-		tprintf("MORE=%ld", m.exdata_ind.MORE_flag);
+		GET (T_EXDATA_IND, exdata_ind);
+		COMMA ();
+		tprintf ("MORE=%ld", m.exdata_ind.MORE_flag);
 		break;
 #endif
 #ifdef T_INFO_ACK
 	    case T_INFO_ACK:	/* info ack           */
-		GET(T_INFO_ACK, info_ack);
-		COMMA();
-		tprintf("TSDU=%ld, ETSDU=%ld, CDATA=%ld, DDATA=%ld, "
+		GET (T_INFO_ACK, info_ack);
+		COMMA ();
+		tprintf ("TSDU=%ld, ETSDU=%ld, CDATA=%ld, DDATA=%ld, "
 			 "ADDR=%ld, OPT=%ld, TIDU=%ld, SERV=",
 			 m.info_ack.TSDU_size, m.info_ack.ETSDU_size,
 			 m.info_ack.CDATA_size, m.info_ack.DDATA_size,
 			 m.info_ack.ADDR_size, m.info_ack.OPT_size,
 			 m.info_ack.TIDU_size);
-		printxval(service_type, m.info_ack.SERV_type, "T_???");
-		tprints(", CURRENT=");
-		printxval(ts_state, m.info_ack.CURRENT_state, "TS_???");
-		tprints(", PROVIDER=");
-		printflags(provider_flags, m.info_ack.PROVIDER_flag, "???");
+		printxval (service_type, m.info_ack.SERV_type, "T_???");
+		tprintf (", CURRENT=");
+		printxval (ts_state, m.info_ack.CURRENT_state, "TS_???");
+		tprintf (", PROVIDER=");
+		printflags (provider_flags, m.info_ack.PROVIDER_flag, "???");
 		break;
 #endif
 #ifdef T_BIND_ACK
 	    case T_BIND_ACK:	/* bind ack           */
-		GET(T_BIND_ACK, bind_ack);
-		ADDR(bind_ack, ADDR);
-		tprintf(", CONIND=%ld", m.bind_ack.CONIND_number);
+		GET (T_BIND_ACK, bind_ack);
+		ADDR (bind_ack, ADDR);
+		tprintf (", CONIND=%ld", m.bind_ack.CONIND_number);
 		break;
 #endif
 #ifdef T_ERROR_ACK
 	    case T_ERROR_ACK:	/* error ack          */
-		GET(T_ERROR_ACK, error_ack);
-		COMMA();
-		tprints("ERROR=");
-		printxval(transport_user_options,
+		GET (T_ERROR_ACK, error_ack);
+		COMMA ();
+		tprintf ("ERROR=");
+		printxval (transport_user_options,
 			   m.error_ack.ERROR_prim, "TI_???");
-		tprints(", TLI=");
-		printxval(tli_errors, m.error_ack.TLI_error, "T???");
-		tprintf("UNIX=%s", strerror(m.error_ack.UNIX_error));
+		tprintf (", TLI=");
+		printxval (tli_errors, m.error_ack.TLI_error, "T???");
+		tprintf ("UNIX=%s", strerror (m.error_ack.UNIX_error));
 		break;
 #endif
 #ifdef T_OK_ACK
 	    case T_OK_ACK:	/* ok ack             */
-		GET(T_OK_ACK, ok_ack);
-		COMMA();
-		tprints("CORRECT=");
-		printxval(transport_user_options,
+		GET (T_OK_ACK, ok_ack);
+		COMMA ();
+		tprintf ("CORRECT=");
+		printxval (transport_user_options,
 			   m.ok_ack.CORRECT_prim, "TI_???");
 		break;
 #endif
 #ifdef T_UNITDATA_IND
 	    case T_UNITDATA_IND:	/* unitdata ind       */
-		GET(T_UNITDATA_IND, unitdata_ind);
-		ADDR(unitdata_ind, SRC);
-		ADDR(unitdata_ind, OPT);
+		GET (T_UNITDATA_IND, unitdata_ind);
+		ADDR (unitdata_ind, SRC);
+		ADDR (unitdata_ind, OPT);
 		break;
 #endif
 #ifdef T_UDERROR_IND
 	    case T_UDERROR_IND:	/* unitdata error ind */
-		GET(T_UDERROR_IND, uderror_ind);
-		ADDR(uderror_ind, DEST);
-		ADDR(uderror_ind, OPT);
-		tprintf(", ERROR=%ld", m.uderror_ind.ERROR_type);
+		GET (T_UDERROR_IND, uderror_ind);
+		ADDR (uderror_ind, DEST);
+		ADDR (uderror_ind, OPT);
+		tprintf (", ERROR=%ld", m.uderror_ind.ERROR_type);
 		break;
 #endif
 #ifdef T_OPTMGMT_ACK
 	    case T_OPTMGMT_ACK:	/* manage opt ack     */
-		GET(T_OPTMGMT_ACK, optmgmt_ack);
-		COMMA();
-		tprints("MGMT=");
-		printflags(transport_user_flags, m.optmgmt_ack.MGMT_flags,
+		GET (T_OPTMGMT_ACK, optmgmt_ack);
+		COMMA ();
+		tprintf ("MGMT=");
+		printflags (transport_user_flags, m.optmgmt_ack.MGMT_flags,
 			    "T_???");
-		STRUCT(optmgmt_ack, OPT, print_optmgmt);
+		STRUCT (optmgmt_ack, OPT, print_optmgmt);
 		break;
 #endif
 #ifdef T_ORDREL_IND
 	case T_ORDREL_IND:	/* orderly rel ind    */
-		GET(T_ORDREL_IND, ordrel_ind);
+		GET (T_ORDREL_IND, ordrel_ind);
 		break;
 #endif
 #ifdef T_ADDR_REQ
 	    case T_ADDR_REQ:	/* address req        */
-		GET(T_ADDR_REQ, addr_req);
+		GET (T_ADDR_REQ, addr_req);
 		break;
 #endif
 #ifdef T_ADDR_ACK
 	    case T_ADDR_ACK:	/* address response   */
-		GET(T_ADDR_ACK, addr_ack);
-		ADDR(addr_ack, LOCADDR);
-		ADDR(addr_ack, REMADDR);
+		GET (T_ADDR_ACK, addr_ack);
+		ADDR (addr_ack, LOCADDR);
+		ADDR (addr_ack, REMADDR);
 		break;
 #endif
 	    default:
@@ -995,7 +1022,7 @@ print_transport_message(struct tcb *tcp, int expect, long addr, int len)
 		break;
 	}
 
-	if (c >= 0) tprints("}");
+	if (c >= 0) tprintf ("}");
 
 #undef ADDR
 #undef COMMA
@@ -1022,7 +1049,7 @@ static int internal_stream_ioctl(struct tcb *tcp, int arg)
 		return 0;
 	if (umove(tcp, arg, &si) < 0) {
 		if (entering(tcp))
-			tprints(", {...}");
+			tprintf(", {...}");
 		return 1;
 	}
 	if (entering(tcp)) {
@@ -1034,7 +1061,7 @@ static int internal_stream_ioctl(struct tcb *tcp, int arg)
 		} else
 			tprintf(", {ic_cmd=%#x", si.ic_cmd);
 		if (si.ic_timout == INFTIM)
-			tprints(", ic_timout=INFTIM, ");
+			tprintf(", ic_timout=INFTIM, ");
 		else
 			tprintf(" ic_timout=%d, ", si.ic_timout);
 	}
@@ -1048,9 +1075,9 @@ static int internal_stream_ioctl(struct tcb *tcp, int arg)
 	}
 	if (in_and_out) {
 		if (entering(tcp))
-			tprints("/* in */ ");
+			tprintf("/* in */ ");
 		else
-			tprints(", /* out */ ");
+			tprintf(", /* out */ ");
 	}
 	if (in_and_out || entering(tcp))
 		tprintf("ic_len=%d, ic_dp=", si.ic_len);
@@ -1060,12 +1087,12 @@ static int internal_stream_ioctl(struct tcb *tcp, int arg)
 		/* in T_BIND_REQ, out T_BIND_ACK */
 		++timod;
 		if (entering(tcp)) {
-			print_transport_message(tcp,
+			print_transport_message (tcp,
 						 T_BIND_REQ,
 						 si.ic_dp, si.ic_len);
 		}
 		else {
-			print_transport_message(tcp,
+			print_transport_message (tcp,
 						 T_BIND_ACK,
 						 si.ic_dp, si.ic_len);
 		}
@@ -1076,12 +1103,12 @@ static int internal_stream_ioctl(struct tcb *tcp, int arg)
 		/* in T_UNBIND_REQ, out T_OK_ACK */
 		++timod;
 		if (entering(tcp)) {
-			print_transport_message(tcp,
+			print_transport_message (tcp,
 						 T_UNBIND_REQ,
 						 si.ic_dp, si.ic_len);
 		}
 		else {
-			print_transport_message(tcp,
+			print_transport_message (tcp,
 						 T_OK_ACK,
 						 si.ic_dp, si.ic_len);
 		}
@@ -1092,12 +1119,12 @@ static int internal_stream_ioctl(struct tcb *tcp, int arg)
 		/* in T_INFO_REQ, out T_INFO_ACK */
 		++timod;
 		if (entering(tcp)) {
-			print_transport_message(tcp,
+			print_transport_message (tcp,
 						 T_INFO_REQ,
 						 si.ic_dp, si.ic_len);
 		}
 		else {
-			print_transport_message(tcp,
+			print_transport_message (tcp,
 						 T_INFO_ACK,
 						 si.ic_dp, si.ic_len);
 		}
@@ -1108,12 +1135,12 @@ static int internal_stream_ioctl(struct tcb *tcp, int arg)
 		/* in T_OPTMGMT_REQ, out T_OPTMGMT_ACK */
 		++timod;
 		if (entering(tcp)) {
-			print_transport_message(tcp,
+			print_transport_message (tcp,
 						 T_OPTMGMT_REQ,
 						 si.ic_dp, si.ic_len);
 		}
 		else {
-			print_transport_message(tcp,
+			print_transport_message (tcp,
 						 T_OPTMGMT_ACK,
 						 si.ic_dp, si.ic_len);
 		}
@@ -1124,7 +1151,7 @@ static int internal_stream_ioctl(struct tcb *tcp, int arg)
 		if (entering(tcp))
 			break;
 		if (umove(tcp, (int) si.ic_dp, &udata) < 0)
-			tprints("{...}");
+			tprintf("{...}");
 		else {
 			tprintf("{tidusize=%d, addrsize=%d, ",
 				udata.tidusize, udata.addrsize);
@@ -1133,7 +1160,7 @@ static int internal_stream_ioctl(struct tcb *tcp, int arg)
 			tprintf("servtype=%d, so_state=%d, ",
 				udata.servtype, udata.so_state);
 			tprintf("so_options=%d", udata.so_options);
-			tprints("}");
+			tprintf("}");
 		}
 		break;
 #endif /* SI_GETUDATA */
@@ -1142,9 +1169,9 @@ static int internal_stream_ioctl(struct tcb *tcp, int arg)
 		break;
 	}
 	if (exiting(tcp)) {
-		tprints("}");
+		tprintf("}");
 		if (timod && tcp->u_rval && !syserror(tcp)) {
-			tcp->auxstr = xlookup(tli_errors, tcp->u_rval);
+			tcp->auxstr = xlookup (tli_errors, tcp->u_rval);
 			return RVAL_STR + 1;
 		}
 	}
@@ -1153,7 +1180,9 @@ static int internal_stream_ioctl(struct tcb *tcp, int arg)
 }
 
 int
-stream_ioctl(struct tcb *tcp, int code, int arg)
+stream_ioctl(tcp, code, arg)
+struct tcb *tcp;
+int code, arg;
 {
 #ifdef I_LIST
 	int i;
@@ -1180,7 +1209,7 @@ stream_ioctl(struct tcb *tcp, int code, int arg)
 	case I_LOOK:
 	case I_FIND:
 		/* arg is a string */
-		tprints(", ");
+		tprintf(", ");
 		printpath(tcp, arg);
 		return 1;
 	case I_POP:
@@ -1188,56 +1217,56 @@ stream_ioctl(struct tcb *tcp, int code, int arg)
 		return 1;
 	case I_FLUSH:
 		/* argument is an option */
-		tprints(", ");
+		tprintf(", ");
 		printxval(stream_flush_options, arg, "FLUSH???");
 		return 1;
 #ifdef I_FLUSHBAND
 	case I_FLUSHBAND:
 		/* argument is a pointer to a bandinfo struct */
 		if (umove(tcp, arg, &bi) < 0)
-			tprints(", {...}");
+			tprintf(", {...}");
 		else {
 			tprintf(", {bi_pri=%d, bi_flag=", bi.bi_pri);
 			printflags(stream_flush_options, bi.bi_flag, "FLUSH???");
-			tprints("}");
+			tprintf("}");
 		}
 		return 1;
 #endif /* I_FLUSHBAND */
 	case I_SETSIG:
 		/* argument is a set of flags */
-		tprints(", ");
+		tprintf(", ");
 		printflags(stream_setsig_flags, arg, "S_???");
 		return 1;
 	case I_GETSIG:
 		/* argument is a pointer to a set of flags */
 		if (syserror(tcp))
 			return 0;
-		tprints(", [");
+		tprintf(", [");
 		if (umove(tcp, arg, &val) < 0)
-			tprints("?");
+			tprintf("?");
 		else
 			printflags(stream_setsig_flags, val, "S_???");
-		tprints("]");
+		tprintf("]");
 		return 1;
 	case I_PEEK:
 		/* argument is a pointer to a strpeek structure */
 		if (syserror(tcp) || !arg)
 			return 0;
 		if (umove(tcp, arg, &sp) < 0) {
-			tprints(", {...}");
+			tprintf(", {...}");
 			return 1;
 		}
-		tprints(", {ctlbuf=");
+		tprintf(", {ctlbuf=");
 		printstrbuf(tcp, &sp.ctlbuf, 1);
-		tprints(", databuf=");
+		tprintf(", databuf=");
 		printstrbuf(tcp, &sp.databuf, 1);
-		tprints(", flags=");
+		tprintf(", flags=");
 		printflags(msgflags, sp.flags, "RS_???");
-		tprints("}");
+		tprintf("}");
 		return 1;
 	case I_SRDOPT:
 		/* argument is an option with flags */
-		tprints(", ");
+		tprintf(", ");
 		printxval(stream_read_options, arg & RMODEMASK, "R???");
 		addflags(stream_read_flags, arg & ~RMODEMASK);
 		return 1;
@@ -1245,15 +1274,15 @@ stream_ioctl(struct tcb *tcp, int code, int arg)
 		/* argument is an pointer to an option with flags */
 		if (syserror(tcp))
 			return 0;
-		tprints(", [");
+		tprintf(", [");
 		if (umove(tcp, arg, &val) < 0)
-			tprints("?");
+			tprintf("?");
 		else {
 			printxval(stream_read_options,
 				  arg & RMODEMASK, "R???");
 			addflags(stream_read_flags, arg & ~RMODEMASK);
 		}
-		tprints("]");
+		tprintf("]");
 		return 1;
 	case I_NREAD:
 #ifdef I_GETBAND
@@ -1268,7 +1297,7 @@ stream_ioctl(struct tcb *tcp, int code, int arg)
 		/* argument is a pointer to a decimal integer */
 		if (syserror(tcp))
 			return 0;
-		tprints(", ");
+		tprintf(", ");
 		printnum(tcp, arg, "%d");
 		return 1;
 	case I_FDINSERT:
@@ -1276,21 +1305,21 @@ stream_ioctl(struct tcb *tcp, int code, int arg)
 		if (syserror(tcp) || !arg)
 			return 0;
 		if (umove(tcp, arg, &sfi) < 0) {
-			tprints(", {...}");
+			tprintf(", {...}");
 			return 1;
 		}
-		tprints(", {ctlbuf=");
+		tprintf(", {ctlbuf=");
 		printstrbuf(tcp, &sfi.ctlbuf, 1);
-		tprints(", databuf=");
+		tprintf(", databuf=");
 		printstrbuf(tcp, &sfi.databuf, 1);
-		tprints(", flags=");
+		tprintf(", flags=");
 		printflags(msgflags, sfi.flags, "RS_???");
 		tprintf(", filedes=%d, offset=%d}", sfi.fildes, sfi.offset);
 		return 1;
 #ifdef I_SWROPT
 	case I_SWROPT:
 		/* argument is a set of flags */
-		tprints(", ");
+		tprintf(", ");
 		printflags(stream_write_flags, arg, "SND???");
 		return 1;
 #endif /* I_SWROPT */
@@ -1299,12 +1328,12 @@ stream_ioctl(struct tcb *tcp, int code, int arg)
 		/* argument is an pointer to an option with flags */
 		if (syserror(tcp))
 			return 0;
-		tprints(", [");
+		tprintf(", [");
 		if (umove(tcp, arg, &val) < 0)
-			tprints("?");
+			tprintf("?");
 		else
 			printflags(stream_write_flags, arg, "SND???");
-		tprints("]");
+		tprintf("]");
 		return 1;
 #endif /* I_GWROPT */
 	case I_SENDFD:
@@ -1326,7 +1355,7 @@ stream_ioctl(struct tcb *tcp, int code, int arg)
 		if (syserror(tcp) || !arg)
 			return 0;
 		if (umove(tcp, arg, &srf) < 0) {
-			tprints(", {...}");
+			tprintf(", {...}");
 			return 1;
 		}
 		tprintf(", {fd=%d, uid=%lu, gid=%lu}", srf.fd,
@@ -1337,25 +1366,25 @@ stream_ioctl(struct tcb *tcp, int code, int arg)
 		if (syserror(tcp))
 			return 0;
 		if (arg == 0) {
-			tprints(", NULL");
+			tprintf(", NULL");
 			return 1;
 		}
 		if (umove(tcp, arg, &sl) < 0) {
-			tprints(", {...}");
+			tprintf(", {...}");
 			return 1;
 		}
 		tprintf(", {sl_nmods=%d, sl_modlist=[", sl.sl_nmods);
 		for (i = 0; i < tcp->u_rval; i++) {
 			if (i)
-				tprints(", ");
+				tprintf(", ");
 			printpath(tcp, (int) sl.sl_modlist[i].l_name);
 		}
-		tprints("]}");
+		tprintf("]}");
 		return 1;
 #endif /* I_LIST */
 #ifdef I_ATMARK
 	case I_ATMARK:
-		tprints(", ");
+		tprintf(", ");
 		printxval(stream_atmark_options, arg, "???MARK");
 		return 1;
 #endif /* I_ATMARK */

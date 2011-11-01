@@ -54,7 +54,7 @@ struct blk_user_trace_setup {
 #ifndef BLKTRACESTART
 #define BLKTRACESTART _IO(0x12,116)
 #endif
-#ifndef BLKTRACESTOP
+#ifndef BLKTRACESTART
 #define BLKTRACESTOP _IO(0x12,117)
 #endif
 #ifndef BLKTRACETEARDOWN
@@ -93,7 +93,7 @@ print_blkpg_req(struct tcb *tcp, struct blkpg_ioctl_arg *blkpg)
 {
 	struct blkpg_partition p;
 
-	tprints("{");
+	tprintf("{");
 	printxval(blkpg_ops, blkpg->op, "BLKPG_???");
 
 	tprintf(", flags=%d, datalen=%d, ",
@@ -194,7 +194,6 @@ block_ioctl(struct tcb *tcp, long code, long arg)
 			}
 		break;
 
-#ifdef HAVE_BLKGETSIZE64
 	/* return an uint64_t */
 	case BLKGETSIZE64:
 		if (exiting(tcp)) {
@@ -205,7 +204,6 @@ block_ioctl(struct tcb *tcp, long code, long arg)
 				tprintf(", %" PRIu64, val);
 		}
 		break;
-#endif
 
 	/* More complex types */
 	case BLKDISCARD:
@@ -239,7 +237,7 @@ block_ioctl(struct tcb *tcp, long code, long arg)
 			if (umove(tcp, arg, &blkpg) < 0)
 				tprintf(", %#lx", arg);
 			else {
-				tprints(", ");
+				tprintf(", ");
 				print_blkpg_req(tcp, &blkpg);
 			}
 		}
@@ -270,7 +268,7 @@ block_ioctl(struct tcb *tcp, long code, long arg)
 
 	/* No arguments or unhandled */
 	case BLKTRACESTART:
-	//case BLKTRACESTOP:
+	case BLKTRACESTOP:
 	case BLKTRACETEARDOWN:
 	case BLKFLSBUF: /* Requires driver knowlege */
 	case BLKRRPART: /* No args */

@@ -94,13 +94,15 @@
 #endif
 
 int
-tv_nz(struct timeval *a)
+tv_nz(a)
+struct timeval *a;
 {
 	return a->tv_sec || a->tv_usec;
 }
 
 int
-tv_cmp(struct timeval *a, struct timeval *b)
+tv_cmp(a, b)
+struct timeval *a, *b;
 {
 	if (a->tv_sec < b->tv_sec
 	    || (a->tv_sec == b->tv_sec && a->tv_usec < b->tv_usec))
@@ -112,13 +114,15 @@ tv_cmp(struct timeval *a, struct timeval *b)
 }
 
 double
-tv_float(struct timeval *tv)
+tv_float(tv)
+struct timeval *tv;
 {
 	return tv->tv_sec + tv->tv_usec/1000000.0;
 }
 
 void
-tv_add(struct timeval *tv, struct timeval *a, struct timeval *b)
+tv_add(tv, a, b)
+struct timeval *tv, *a, *b;
 {
 	tv->tv_sec = a->tv_sec + b->tv_sec;
 	tv->tv_usec = a->tv_usec + b->tv_usec;
@@ -129,7 +133,8 @@ tv_add(struct timeval *tv, struct timeval *a, struct timeval *b)
 }
 
 void
-tv_sub(struct timeval *tv, struct timeval *a, struct timeval *b)
+tv_sub(tv, a, b)
+struct timeval *tv, *a, *b;
 {
 	tv->tv_sec = a->tv_sec - b->tv_sec;
 	tv->tv_usec = a->tv_usec - b->tv_usec;
@@ -140,7 +145,9 @@ tv_sub(struct timeval *tv, struct timeval *a, struct timeval *b)
 }
 
 void
-tv_div(struct timeval *tv, struct timeval *a, int n)
+tv_div(tv, a, n)
+struct timeval *tv, *a;
+int n;
 {
 	tv->tv_usec = (a->tv_sec % n * 1000000 + a->tv_usec + n / 2) / n;
 	tv->tv_sec = a->tv_sec / n + tv->tv_usec / 1000000;
@@ -148,7 +155,9 @@ tv_div(struct timeval *tv, struct timeval *a, int n)
 }
 
 void
-tv_mul(struct timeval *tv, struct timeval *a, int n)
+tv_mul(tv, a, n)
+struct timeval *tv, *a;
+int n;
 {
 	tv->tv_usec = a->tv_usec * n;
 	tv->tv_sec = a->tv_sec * n + tv->tv_usec / 1000000;
@@ -163,16 +172,6 @@ xlookup(const struct xlat *xlat, int val)
 			return xlat->str;
 	return NULL;
 }
-
-#if !defined HAVE_STPCPY
-char *
-stpcpy(char *dst, const char *src)
-{
-	while ((*dst = *src++) != '\0')
-		dst++;
-	return dst;
-}
-#endif
 
 /*
  * Generic ptrace wrapper which tracks ESRCH errors
@@ -224,7 +223,8 @@ ptrace_restart(int op, struct tcb *tcp, int sig)
 		msg = "CONT";
 	if (op == PTRACE_DETACH)
 		msg = "DETACH";
-	perror_msg("ptrace(PTRACE_%s,1,%d)", msg, sig);
+	fprintf(stderr, "strace: ptrace(PTRACE_%s,1,%d): %s\n",
+			msg, sig, strerror(err));
 	return -1;
 }
 
@@ -237,7 +237,7 @@ printxval(const struct xlat *xlat, int val, const char *dflt)
 	const char *str = xlookup(xlat, val);
 
 	if (str)
-		tprints(str);
+		tprintf("%s", str);
 	else
 		tprintf("%#x /* %s */", val, dflt);
 }
@@ -252,10 +252,9 @@ printllval(struct tcb *tcp, const char *format, int llarg)
 {
 # if defined(FREEBSD) \
      || (defined(LINUX) && defined(POWERPC) && !defined(POWERPC64)) \
-     || defined(LINUX_MIPSO32) \
-     || defined(__ARM_EABI__)
+     || defined (LINUX_MIPSO32)
 	/* Align 64bit argument to 64bit boundary.  */
-	llarg = (llarg + 1) & 0x1e;
+	if (llarg % 2) llarg++;
 # endif
 # if defined LINUX && (defined X86_64 || defined POWERPC64)
 	if (current_personality == 0) {
@@ -264,7 +263,7 @@ printllval(struct tcb *tcp, const char *format, int llarg)
 	} else {
 #  ifdef POWERPC64
 		/* Align 64bit argument to 64bit boundary.  */
-		llarg = (llarg + 1) & 0x1e;
+		if (llarg % 2) llarg++;
 #  endif
 		tprintf(format, LONG_LONG(tcp->u_arg[llarg], tcp->u_arg[llarg + 1]));
 		llarg += 2;
@@ -288,22 +287,29 @@ printllval(struct tcb *tcp, const char *format, int llarg)
  * print the entries whose bits are on in `flags'
  * return # of flags printed.
  */
-void
-addflags(const struct xlat *xlat, int flags)
+int
+addflags(xlat, flags)
+const struct xlat *xlat;
+int flags;
 {
-	for (; xlat->str; xlat++) {
+	int n;
+
+	for (n = 0; xlat->str; xlat++) {
 		if (xlat->val && (flags & xlat->val) == xlat->val) {
 			tprintf("|%s", xlat->str);
 			flags &= ~xlat->val;
+			n++;
 		}
 	}
 	if (flags) {
 		tprintf("|%#x", flags);
+		n++;
 	}
+	return n;
 }
 
 /*
- * Interpret `xlat' as an array of flags.
+ * Interpret `xlat' as an array of flags/
  * Print to static string the entries whose bits are on in `flags'
  * Return static string.
  */
@@ -311,24 +317,23 @@ const char *
 sprintflags(const char *prefix, const struct xlat *xlat, int flags)
 {
 	static char outstr[1024];
-	char *outptr;
 	int found = 0;
 
-	outptr = stpcpy(outstr, prefix);
+	strcpy(outstr, prefix);
 
 	for (; xlat->str; xlat++) {
 		if ((flags & xlat->val) == xlat->val) {
 			if (found)
-				*outptr++ = '|';
-			outptr = stpcpy(outptr, xlat->str);
+				strcat(outstr, "|");
+			strcat(outstr, xlat->str);
 			flags &= ~xlat->val;
 			found = 1;
 		}
 	}
 	if (flags) {
 		if (found)
-			*outptr++ = '|';
-		outptr += sprintf(outptr, "%#x", flags);
+			strcat(outstr, "|");
+		sprintf(outstr + strlen(outstr), "%#x", flags);
 	}
 
 	return outstr;
@@ -341,7 +346,7 @@ printflags(const struct xlat *xlat, int flags, const char *dflt)
 	const char *sep;
 
 	if (flags == 0 && xlat->val == 0) {
-		tprints(xlat->str);
+		tprintf("%s", xlat->str);
 		return 1;
 	}
 
@@ -367,7 +372,7 @@ printflags(const struct xlat *xlat, int flags, const char *dflt)
 				tprintf(" /* %s */", dflt);
 		} else {
 			if (dflt)
-				tprints("0");
+				tprintf("0");
 		}
 	}
 
@@ -380,16 +385,16 @@ printnum(struct tcb *tcp, long addr, const char *fmt)
 	long num;
 
 	if (!addr) {
-		tprints("NULL");
+		tprintf("NULL");
 		return;
 	}
 	if (umove(tcp, addr, &num) < 0) {
 		tprintf("%#lx", addr);
 		return;
 	}
-	tprints("[");
+	tprintf("[");
 	tprintf(fmt, num);
-	tprints("]");
+	tprintf("]");
 }
 
 void
@@ -398,33 +403,31 @@ printnum_int(struct tcb *tcp, long addr, const char *fmt)
 	int num;
 
 	if (!addr) {
-		tprints("NULL");
+		tprintf("NULL");
 		return;
 	}
 	if (umove(tcp, addr, &num) < 0) {
 		tprintf("%#lx", addr);
 		return;
 	}
-	tprints("[");
+	tprintf("[");
 	tprintf(fmt, num);
-	tprints("]");
+	tprintf("]");
 }
 
 void
 printfd(struct tcb *tcp, int fd)
 {
-	const char *p;
-
-	if (show_fd_path && (p = getfdpath(tcp, fd)))
-		tprintf("%d<%s>", fd, p);
-	else
-		tprintf("%d", fd);
+	tprintf("%d", fd);
 }
 
 void
-printuid(const char *text, unsigned long uid)
+printuid(text, uid)
+const char *text;
+unsigned long uid;
 {
-	tprintf((uid == -1) ? "%s%ld" : "%s%lu", text, uid);
+	tprintf("%s", text);
+	tprintf((uid == -1) ? "%ld" : "%lu", uid);
 }
 
 static char path[MAXPATHLEN + 1];
@@ -440,15 +443,8 @@ string_quote(const char *instr, char *outstr, int len, int size)
 {
 	const unsigned char *ustr = (const unsigned char *) instr;
 	char *s = outstr;
-	int usehex, c, i, eol;
+	int usehex = 0, c, i;
 
-	eol = 0x100; /* this can never match a char */
-	if (len < 0) {
-		size--;
-		eol = '\0';
-	}
-
-	usehex = 0;
 	if (xflag > 1)
 		usehex = 1;
 	else if (xflag) {
@@ -457,8 +453,13 @@ string_quote(const char *instr, char *outstr, int len, int size)
 		for (i = 0; i < size; ++i) {
 			c = ustr[i];
 			/* Check for NUL-terminated string. */
-			if (c == eol)
-				break;
+			if (len < 0) {
+				if (c == '\0')
+					break;
+				/* Quote at most size - 1 bytes. */
+				if (i == size - 1)
+					continue;
+			}
 			if (!isprint(c) && !isspace(c)) {
 				usehex = 1;
 				break;
@@ -473,19 +474,27 @@ string_quote(const char *instr, char *outstr, int len, int size)
 		for (i = 0; i < size; ++i) {
 			c = ustr[i];
 			/* Check for NUL-terminated string. */
-			if (c == eol)
-				goto asciz_ended;
-			*s++ = '\\';
-			*s++ = 'x';
-			*s++ = "0123456789abcdef"[c >> 4];
-			*s++ = "0123456789abcdef"[c & 0xf];
+			if (len < 0) {
+				if (c == '\0')
+					break;
+				/* Quote at most size - 1 bytes. */
+				if (i == size - 1)
+					continue;
+			}
+			sprintf(s, "\\x%02x", c);
+			s += 4;
 		}
 	} else {
 		for (i = 0; i < size; ++i) {
 			c = ustr[i];
 			/* Check for NUL-terminated string. */
-			if (c == eol)
-				goto asciz_ended;
+			if (len < 0) {
+				if (c == '\0')
+					break;
+				/* Quote at most size - 1 bytes. */
+				if (i == size - 1)
+					continue;
+			}
 			switch (c) {
 				case '\"': case '\\':
 					*s++ = '\\';
@@ -514,25 +523,13 @@ string_quote(const char *instr, char *outstr, int len, int size)
 				default:
 					if (isprint(c))
 						*s++ = c;
-					else {
-						/* Print \octal */
-						*s++ = '\\';
-						if (i + 1 < size
-						    && ustr[i + 1] >= '0'
-						    && ustr[i + 1] <= '9'
-						) {
-							/* Print \ooo */
-							*s++ = '0' + (c >> 6);
-							*s++ = '0' + ((c >> 3) & 0x7);
-						} else {
-							/* Print \[[o]o]o */
-							if ((c >> 3) != 0) {
-								if ((c >> 6) != 0)
-									*s++ = '0' + (c >> 6);
-								*s++ = '0' + ((c >> 3) & 0x7);
-							}
-						}
-						*s++ = '0' + (c & 0x7);
+					else if (i + 1 < size
+						 && isdigit(ustr[i + 1])) {
+						sprintf(s, "\\%03o", c);
+						s += 4;
+					} else {
+						sprintf(s, "\\%o", c);
+						s += strlen(s);
 					}
 					break;
 			}
@@ -542,21 +539,8 @@ string_quote(const char *instr, char *outstr, int len, int size)
 	*s++ = '\"';
 	*s = '\0';
 
-	/* Return zero if we printed entire ASCIZ string (didn't truncate it) */
-	if (len < 0 && ustr[i] == '\0') {
-		/* We didn't see NUL yet (otherwise we'd jump to 'asciz_ended')
-		 * but next char is NUL.
-		 */
-		return 0;
-	}
-
-	return 1;
-
- asciz_ended:
-	*s++ = '\"';
-	*s = '\0';
-	/* Return zero: we printed entire ASCIZ string (didn't truncate it) */
-	return 0;
+	/* Return nonzero if the string was unterminated.  */
+	return i == size;
 }
 
 /*
@@ -567,7 +551,7 @@ void
 printpathn(struct tcb *tcp, long addr, int n)
 {
 	if (!addr) {
-		tprints("NULL");
+		tprintf("NULL");
 		return;
 	}
 
@@ -582,16 +566,14 @@ printpathn(struct tcb *tcp, long addr, int n)
 		tprintf("%#lx", addr);
 	else {
 		static char outstr[4*(sizeof path - 1) + sizeof "\"...\""];
-		const char *fmt;
 		int trunc = (path[n] != '\0');
 
 		if (trunc)
 			path[n] = '\0';
-		string_quote(path, outstr, -1, n + 1);
-		fmt = "%s";
+		(void) string_quote(path, outstr, -1, n + 1);
 		if (trunc)
-			fmt = "%s...";
-		tprintf(fmt, outstr);
+			strcat(outstr, "...");
+		tprintf("%s", outstr);
 	}
 }
 
@@ -612,22 +594,20 @@ printstr(struct tcb *tcp, long addr, int len)
 	static char *str = NULL;
 	static char *outstr;
 	int size;
-	const char *fmt;
 
 	if (!addr) {
-		tprints("NULL");
+		tprintf("NULL");
 		return;
 	}
 	/* Allocate static buffers if they are not allocated yet. */
-	if (!str) {
+	if (!str)
 		str = malloc(max_strlen + 1);
-		if (!str)
-			die_out_of_memory();
-	}
-	if (!outstr) {
+	if (!outstr)
 		outstr = malloc(4 * max_strlen + sizeof "\"...\"");
-		if (!outstr)
-			die_out_of_memory();
+	if (!str || !outstr) {
+		fprintf(stderr, "out of memory\n");
+		tprintf("%#lx", addr);
+		return;
 	}
 
 	if (len < 0) {
@@ -637,7 +617,6 @@ printstr(struct tcb *tcp, long addr, int len)
 		 */
 		size = max_strlen + 1;
 		str[max_strlen] = '\0';
-	/* FIXME! umovestr can overwrite the '\0' stored above??? */
 		if (umovestr(tcp, addr, size, str) < 0) {
 			tprintf("%#lx", addr);
 			return;
@@ -651,17 +630,19 @@ printstr(struct tcb *tcp, long addr, int len)
 		}
 	}
 
-	fmt = "%s";
 	if (string_quote(str, outstr, len, size) &&
 	    (len < 0 || len > max_strlen))
-		fmt = "%s...";
+		strcat(outstr, "...");
 
-	tprintf(fmt, outstr);
+	tprintf("%s", outstr);
 }
 
 #if HAVE_SYS_UIO_H
 void
-dumpiov(struct tcb *tcp, int len, long addr)
+dumpiov(tcp, len, addr)
+struct tcb * tcp;
+int len;
+long addr;
 {
 #if defined(LINUX) && SUPPORTED_PERSONALITIES > 1
 	union {
@@ -685,13 +666,12 @@ dumpiov(struct tcb *tcp, int len, long addr)
 #define iov_iov_len(i) iov[i].iov_len
 #endif
 	int i;
-	unsigned size;
+	unsigned long size;
 
-	size = sizeof_iov * len;
-	/* Assuming no sane program has millions of iovs */
-	if ((unsigned)len > 1024*1024 /* insane or negative size? */
+	size = sizeof_iov * (unsigned long) len;
+	if (size / sizeof_iov != len
 	    || (iov = malloc(size)) == NULL) {
-		fprintf(stderr, "Out of memory\n");
+		fprintf(stderr, "out of memory\n");
 		return;
 	}
 	if (umoven(tcp, addr, size, (char *) iov) >= 0) {
@@ -704,7 +684,7 @@ dumpiov(struct tcb *tcp, int len, long addr)
 				iov_iov_len(i));
 		}
 	}
-	free(iov);
+	free((char *) iov);
 #undef sizeof_iov
 #undef iov_iov_base
 #undef iov_iov_len
@@ -713,19 +693,22 @@ dumpiov(struct tcb *tcp, int len, long addr)
 #endif
 
 void
-dumpstr(struct tcb *tcp, long addr, int len)
+dumpstr(tcp, addr, len)
+struct tcb *tcp;
+long addr;
+int len;
 {
 	static int strsize = -1;
 	static unsigned char *str;
+	static char outstr[80];
 	char *s;
 	int i, j;
 
 	if (strsize < len) {
-		free(str);
-		str = malloc(len);
-		if (!str) {
-			strsize = -1;
-			fprintf(stderr, "Out of memory\n");
+		if (str)
+			free(str);
+		if ((str = malloc(len)) == NULL) {
+			fprintf(stderr, "out of memory\n");
 			return;
 		}
 		strsize = len;
@@ -735,8 +718,6 @@ dumpstr(struct tcb *tcp, long addr, int len)
 		return;
 
 	for (i = 0; i < len; i += 16) {
-		char outstr[80];
-
 		s = outstr;
 		sprintf(s, " | %05x ", i);
 		s += 9;
@@ -792,6 +773,10 @@ umoven(struct tcb *tcp, long addr, int len, char *laddr)
 		errno = 0;
 		u.val = ptrace(PTRACE_PEEKDATA, pid, (char *) addr, 0);
 		if (errno) {
+			if (started && (errno==EPERM || errno==EIO)) {
+				/* Ran into 'end of memory' - stupid "printpath" */
+				return 0;
+			}
 			/* But if not started, we had a bogus address. */
 			if (addr != 0 && errno != EIO && errno != ESRCH)
 				perror("ptrace: umoven");
@@ -874,20 +859,17 @@ umovestr(struct tcb *tcp, long addr, int len, char *laddr)
 	   hardware page size).  Assume all pages >= 1024 (a-historical
 	   I know) */
 
-	int page = 1024;	/* How to find this? */
+	int page = 1024; 	/* How to find this? */
 	int move = page - (addr & (page - 1));
 	int left = len;
 
 	lseek(fd, addr, SEEK_SET);
 
 	while (left) {
-		if (move > left)
-			move = left;
-		move = read(fd, laddr, move);
-		if (move <= 0)
+		if (move > left) move = left;
+		if ((move = read(fd, laddr, move)) <= 0)
 			return left != len ? 0 : -1;
-		if (memchr(laddr, 0, move))
-			break;
+		if (memchr (laddr, 0, move)) break;
 		left -= move;
 		laddr += move;
 		addr += move;
@@ -909,12 +891,16 @@ umovestr(struct tcb *tcp, long addr, int len, char *laddr)
 		errno = 0;
 		u.val = ptrace(PTRACE_PEEKDATA, pid, (char *)addr, 0);
 		if (errno) {
+			if (started && (errno==EPERM || errno==EIO)) {
+				/* Ran into 'end of memory' - stupid "printpath" */
+				return 0;
+			}
 			if (addr != 0 && errno != EIO && errno != ESRCH)
 				perror("umovestr");
 			return -1;
 		}
 		started = 1;
-		memcpy(laddr, &u.x[n], m = MIN(sizeof(long)-n, len));
+		memcpy(laddr, &u.x[n], m = MIN(sizeof(long)-n,len));
 		while (n & (sizeof(long) - 1))
 			if (u.x[n++] == '\0')
 				return 0;
@@ -954,7 +940,12 @@ umovestr(struct tcb *tcp, long addr, int len, char *laddr)
 #ifdef SUNOS4
 
 static int
-uload(int cmd, int pid, long addr, int len, char *laddr)
+uload(cmd, pid, addr, len, laddr)
+int cmd;
+int pid;
+long addr;
+int len;
+char *laddr;
 {
 	int peek, poke;
 	int n, m;
@@ -1002,13 +993,20 @@ uload(int cmd, int pid, long addr, int len, char *laddr)
 }
 
 int
-tload(int pid, int addr, int len, char *laddr)
+tload(pid, addr, len, laddr)
+int pid;
+int addr, len;
+char *laddr;
 {
 	return uload(PTRACE_WRITETEXT, pid, addr, len, laddr);
 }
 
 int
-dload(int pid, int addr, int len, char *laddr)
+dload(pid, addr, len, laddr)
+int pid;
+int addr;
+int len;
+char *laddr;
 {
 	return uload(PTRACE_WRITEDATA, pid, addr, len, laddr);
 }
@@ -1018,7 +1016,10 @@ dload(int pid, int addr, int len, char *laddr)
 #ifndef USE_PROCFS
 
 int
-upeek(struct tcb *tcp, long off, long *res)
+upeek(tcp, off, res)
+struct tcb *tcp;
+long off;
+long *res;
 {
 	long val;
 
@@ -1050,7 +1051,7 @@ upeek(struct tcb *tcp, long off, long *res)
 	if (val == -1 && errno) {
 		if (errno != ESRCH) {
 			char buf[60];
-			sprintf(buf, "upeek: ptrace(PTRACE_PEEKUSER,%d,%lu,0)", tcp->pid, off);
+			sprintf(buf,"upeek: ptrace(PTRACE_PEEKUSER,%d,%lu,0)", tcp->pid, off);
 			perror(buf);
 		}
 		return -1;
@@ -1080,7 +1081,7 @@ printcall(struct tcb *tcp)
 
 # elif defined(S390) || defined(S390X)
 	long psw;
-	if (upeek(tcp, PT_PSWADDR, &psw) < 0) {
+	if(upeek(tcp,PT_PSWADDR,&psw) < 0) {
 		PRINTBADPC;
 		return;
 	}
@@ -1122,7 +1123,7 @@ printcall(struct tcb *tcp)
 	long pc;
 
 	if (upeek(tcp, 4*PT_PC, &pc) < 0) {
-		tprints("[????????] ");
+		tprintf ("[????????] ");
 		return;
 	}
 	tprintf("[%08lx] ", pc);
@@ -1130,13 +1131,13 @@ printcall(struct tcb *tcp)
 	long pc;
 
 	if (upeek(tcp, REG_PC, &pc) < 0) {
-		tprints("[????????????????] ");
+		tprintf ("[????????????????] ");
 		return;
 	}
 	tprintf("[%08lx] ", pc);
 # elif defined(SPARC) || defined(SPARC64)
 	struct pt_regs regs;
-	if (ptrace(PTRACE_GETREGS, tcp->pid, (char *)&regs, 0) < 0) {
+	if (ptrace(PTRACE_GETREGS,tcp->pid,(char *)&regs,0) < 0) {
 		PRINTBADPC;
 		return;
 	}
@@ -1148,8 +1149,8 @@ printcall(struct tcb *tcp)
 # elif defined(HPPA)
 	long pc;
 
-	if (upeek(tcp, PT_IAOQ0, &pc) < 0) {
-		tprints("[????????] ");
+	if(upeek(tcp,PT_IAOQ0,&pc) < 0) {
+		tprintf ("[????????] ");
 		return;
 	}
 	tprintf("[%08lx] ", pc);
@@ -1157,7 +1158,7 @@ printcall(struct tcb *tcp)
 	long pc;
 
 	if (upeek(tcp, REG_EPC, &pc) < 0) {
-		tprints("[????????] ");
+		tprintf ("[????????] ");
 		return;
 	}
 	tprintf("[%08lx] ", pc);
@@ -1165,7 +1166,7 @@ printcall(struct tcb *tcp)
 	long pc;
 
 	if (upeek(tcp, 4*REG_PC, &pc) < 0) {
-		tprints("[????????] ");
+		tprintf ("[????????] ");
 		return;
 	}
 	tprintf("[%08lx] ", pc);
@@ -1173,7 +1174,7 @@ printcall(struct tcb *tcp)
 	long pc;
 
 	if (upeek(tcp, REG_PC, &pc) < 0) {
-		tprints("[????????????????] ");
+		tprintf ("[????????????????] ");
 		return;
 	}
 	tprintf("[%08lx] ", pc);
@@ -1189,7 +1190,7 @@ printcall(struct tcb *tcp)
 	long pc;
 
 	if (upeek(tcp, REG_PC, &pc) < 0) {
-		tprints("[????????] ");
+		tprintf("[????????] ");
 		return;
 	}
 	tprintf("[%08lx] ", pc);
@@ -1250,7 +1251,7 @@ printcall(struct tcb *tcp)
  */
 #ifndef USE_PROCFS
 
-# ifdef LINUX
+#ifdef LINUX
 
 #  include "syscall.h"
 
@@ -1306,28 +1307,28 @@ arg_setup(struct tcb *tcp, arg_setup_state *state)
 
 #   ifdef SYS_fork
 static int
-get_arg0(struct tcb *tcp, arg_setup_state *state, long *valp)
+get_arg0 (struct tcb *tcp, arg_setup_state *state, long *valp)
 {
 	int ret;
 
 	if (ia32)
-		ret = upeek(tcp, PT_R11, valp);
+		ret = upeek (tcp, PT_R11, valp);
 	else
-		ret = umoven(tcp,
+		ret = umoven (tcp,
 			      (unsigned long) ia64_rse_skip_regs(*state, 0),
 			      sizeof(long), (void *) valp);
 	return ret;
 }
 
 static int
-get_arg1(struct tcb *tcp, arg_setup_state *state, long *valp)
+get_arg1 (struct tcb *tcp, arg_setup_state *state, long *valp)
 {
 	int ret;
 
 	if (ia32)
-		ret = upeek(tcp, PT_R9, valp);
+		ret = upeek (tcp, PT_R9, valp);
 	else
-		ret = umoven(tcp,
+		ret = umoven (tcp,
 			      (unsigned long) ia64_rse_skip_regs(*state, 1),
 			      sizeof(long), (void *) valp);
 	return ret;
@@ -1335,7 +1336,7 @@ get_arg1(struct tcb *tcp, arg_setup_state *state, long *valp)
 #   endif
 
 static int
-set_arg0(struct tcb *tcp, arg_setup_state *state, long val)
+set_arg0 (struct tcb *tcp, arg_setup_state *state, long val)
 {
 	int req = PTRACE_POKEDATA;
 	void *ap;
@@ -1351,7 +1352,7 @@ set_arg0(struct tcb *tcp, arg_setup_state *state, long val)
 }
 
 static int
-set_arg1(struct tcb *tcp, arg_setup_state *state, long val)
+set_arg1 (struct tcb *tcp, arg_setup_state *state, long val)
 {
 	int req = PTRACE_POKEDATA;
 	void *ap;
@@ -1377,9 +1378,9 @@ set_arg1(struct tcb *tcp, arg_setup_state *state, long val)
 typedef struct pt_regs arg_setup_state;
 
 #   define arg_setup(tcp, state) \
-    (ptrace(PTRACE_GETREGS, tcp->pid, (char *) (state), 0))
+    (ptrace (PTRACE_GETREGS, tcp->pid, (char *) (state), 0))
 #   define arg_finish_change(tcp, state) \
-    (ptrace(PTRACE_SETREGS, tcp->pid, (char *) (state), 0))
+    (ptrace (PTRACE_SETREGS, tcp->pid, (char *) (state), 0))
 
 #   define get_arg0(tcp, state, valp) (*(valp) = (state)->u_regs[U_REG_O0], 0)
 #   define get_arg1(tcp, state, valp) (*(valp) = (state)->u_regs[U_REG_O1], 0)
@@ -1444,20 +1445,20 @@ typedef int arg_setup_state;
 #   define arg_setup(tcp, state) (0)
 #   define arg_finish_change(tcp, state)	0
 #   define get_arg0(tcp, cookie, valp) \
-    (upeek((tcp), arg0_offset, (valp)))
+    (upeek ((tcp), arg0_offset, (valp)))
 #   define get_arg1(tcp, cookie, valp) \
-    (upeek((tcp), arg1_offset, (valp)))
+    (upeek ((tcp), arg1_offset, (valp)))
 
 static int
-set_arg0(struct tcb *tcp, void *cookie, long val)
+set_arg0 (struct tcb *tcp, void *cookie, long val)
 {
-	return ptrace(PTRACE_POKEUSER, tcp->pid, (char*)arg0_offset, val);
+	return ptrace (PTRACE_POKEUSER, tcp->pid, (char*)arg0_offset, val);
 }
 
 static int
-set_arg1(struct tcb *tcp, void *cookie, long val)
+set_arg1 (struct tcb *tcp, void *cookie, long val)
 {
-	return ptrace(PTRACE_POKEUSER, tcp->pid, (char*)arg1_offset, val);
+	return ptrace (PTRACE_POKEUSER, tcp->pid, (char*)arg1_offset, val);
 }
 
 #  endif /* architectures */
@@ -1507,13 +1508,13 @@ setbpt(struct tcb *tcp)
 	case SYS_fork:
 #  endif
 #  if defined SYS_fork || defined SYS_vfork
-		if (arg_setup(tcp, &state) < 0
-		    || get_arg0(tcp, &state, &tcp->inst[0]) < 0
-		    || get_arg1(tcp, &state, &tcp->inst[1]) < 0
+		if (arg_setup (tcp, &state) < 0
+		    || get_arg0 (tcp, &state, &tcp->inst[0]) < 0
+		    || get_arg1 (tcp, &state, &tcp->inst[1]) < 0
 		    || change_syscall(tcp, clone_scno[current_personality]) < 0
-		    || set_arg0(tcp, &state, CLONE_PTRACE|SIGCHLD) < 0
-		    || set_arg1(tcp, &state, 0) < 0
-		    || arg_finish_change(tcp, &state) < 0)
+		    || set_arg0 (tcp, &state, CLONE_PTRACE|SIGCHLD) < 0
+		    || set_arg1 (tcp, &state, 0) < 0
+		    || arg_finish_change (tcp, &state) < 0)
 			return -1;
 		tcp->u_arg[arg0_index] = CLONE_PTRACE|SIGCHLD;
 		tcp->u_arg[arg1_index] = 0;
@@ -1521,9 +1522,9 @@ setbpt(struct tcb *tcp)
 		return 0;
 #  endif
 
-	case SYS_clone: ;
+	case SYS_clone:
 #  ifdef SYS_clone2
-	case SYS_clone2: ;
+	case SYS_clone2:
 #  endif
 		/* ia64 calls directly `clone (CLONE_VFORK | CLONE_VM)'
 		   contrary to x86 SYS_vfork above.  Even on x86 we turn the
@@ -1533,12 +1534,12 @@ setbpt(struct tcb *tcp)
 		   clear also CLONE_VM but only in the CLONE_VFORK case as
 		   otherwise we would break pthread_create.  */
 
-		long new_arg0 = (tcp->u_arg[arg0_index] | CLONE_PTRACE);
-		if (new_arg0 & CLONE_VFORK)
-			new_arg0 &= ~(unsigned long)(CLONE_VFORK | CLONE_VM);
-		if (arg_setup(tcp, &state) < 0
-		 || set_arg0(tcp, &state, new_arg0) < 0
-		 || arg_finish_change(tcp, &state) < 0)
+		if ((arg_setup (tcp, &state) < 0
+		    || set_arg0 (tcp, &state,
+				 (tcp->u_arg[arg0_index] | CLONE_PTRACE)
+				 & ~(tcp->u_arg[arg0_index] & CLONE_VFORK
+				     ? CLONE_VFORK | CLONE_VM : 0)) < 0
+		    || arg_finish_change (tcp, &state) < 0))
 			return -1;
 		tcp->flags |= TCB_BPTSET;
 		tcp->inst[0] = tcp->u_arg[arg0_index];
@@ -1555,15 +1556,15 @@ setbpt(struct tcb *tcp)
 }
 
 int
-clearbpt(struct tcb *tcp)
+clearbpt(tcp)
+struct tcb *tcp;
 {
 	arg_setup_state state;
-	if (arg_setup(tcp, &state) < 0
-	    || restore_arg0(tcp, &state, tcp->inst[0]) < 0
-	    || restore_arg1(tcp, &state, tcp->inst[1]) < 0
-	    || arg_finish_change(tcp, &state))
-		if (errno != ESRCH)
-			return -1;
+	if (arg_setup (tcp, &state) < 0
+	    || restore_arg0 (tcp, &state, tcp->inst[0]) < 0
+	    || restore_arg1 (tcp, &state, tcp->inst[1]) < 0
+	    || arg_finish_change (tcp, &state))
+		if (errno != ESRCH) return -1;
 	tcp->flags &= ~TCB_BPTSET;
 	return 0;
 }
@@ -1571,7 +1572,8 @@ clearbpt(struct tcb *tcp)
 # else /* !defined LINUX */
 
 int
-setbpt(struct tcb *tcp)
+setbpt(tcp)
+struct tcb *tcp;
 {
 #  ifdef SUNOS4
 #   ifdef SPARC	/* This code is slightly sparc specific */
@@ -1626,7 +1628,8 @@ setbpt(struct tcb *tcp)
 }
 
 int
-clearbpt(struct tcb *tcp)
+clearbpt(tcp)
+struct tcb *tcp;
 {
 #  ifdef SUNOS4
 #   ifdef SPARC
@@ -1689,7 +1692,9 @@ clearbpt(struct tcb *tcp)
 #ifdef SUNOS4
 
 static int
-getex(struct tcb *tcp, struct exec *hdr)
+getex(tcp, hdr)
+struct tcb *tcp;
+struct exec *hdr;
 {
 	int n;
 
@@ -1709,7 +1714,8 @@ getex(struct tcb *tcp, struct exec *hdr)
 }
 
 int
-fixvfork(struct tcb *tcp)
+fixvfork(tcp)
+struct tcb *tcp;
 {
 	int pid = tcp->pid;
 	/*
@@ -1735,9 +1741,10 @@ fixvfork(struct tcb *tcp)
 		fprintf(stderr, "Cannot read link_dynamic_2\n");
 		return -1;
 	}
-	strtab = malloc((unsigned)ld.ld_symb_size);
-	if (!strtab)
-		die_out_of_memory();
+	if ((strtab = malloc((unsigned)ld.ld_symb_size)) == NULL) {
+		fprintf(stderr, "out of memory\n");
+		return -1;
+	}
 	if (umoven(tcp, (int)ld.ld_symbols+(int)N_TXTADDR(hdr),
 					(int)ld.ld_symb_size, strtab) < 0)
 		goto err;

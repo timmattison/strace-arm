@@ -132,7 +132,7 @@ print_rlimit32(struct tcb *tcp)
 	} rlim;
 
 	if (umove(tcp, tcp->u_arg[1], &rlim) < 0)
-		tprints("{...}");
+		tprintf("{...}");
 	else {
 		tprintf("{rlim_cur=%s,",
 			sprintrlim(rlim.rlim_cur == -1 ? RLIM_INFINITY
@@ -151,7 +151,7 @@ sys_getrlimit(struct tcb *tcp)
 
 	if (entering(tcp)) {
 		printxval(resources, tcp->u_arg[0], "RLIMIT_???");
-		tprints(", ");
+		tprintf(", ");
 	}
 	else {
 		if (syserror(tcp) || !verbose(tcp))
@@ -161,7 +161,7 @@ sys_getrlimit(struct tcb *tcp)
 			print_rlimit32(tcp);
 # endif
 		else if (umove(tcp, tcp->u_arg[1], &rlim) < 0)
-			tprints("{...}");
+			tprintf("{...}");
 		else {
 			tprintf("{rlim_cur=%s,", sprintrlim(rlim.rlim_cur));
 			tprintf(" rlim_max=%s}", sprintrlim(rlim.rlim_max));
@@ -177,7 +177,7 @@ sys_setrlimit(struct tcb *tcp)
 
 	if (entering(tcp)) {
 		printxval(resources, tcp->u_arg[0], "RLIMIT_???");
-		tprints(", ");
+		tprintf(", ");
 		if (!verbose(tcp))
 			tprintf("%#lx", tcp->u_arg[1]);
 # if defined LINUX && (defined POWERPC64 || defined X86_64)
@@ -185,7 +185,7 @@ sys_setrlimit(struct tcb *tcp)
 			print_rlimit32(tcp);
 # endif
 		else if (umove(tcp, tcp->u_arg[1], &rlim) < 0)
-			tprints("{...}");
+			tprintf("{...}");
 		else {
 			tprintf("{rlim_cur=%s,", sprintrlim(rlim.rlim_cur));
 			tprintf(" rlim_max=%s}", sprintrlim(rlim.rlim_max));
@@ -217,13 +217,13 @@ sys_getrlimit64(struct tcb *tcp)
 
 	if (entering(tcp)) {
 		printxval(resources, tcp->u_arg[0], "RLIMIT_???");
-		tprints(", ");
+		tprintf(", ");
 	}
 	else {
 		if (syserror(tcp) || !verbose(tcp))
 			tprintf("%#lx", tcp->u_arg[1]);
 		else if (umove(tcp, tcp->u_arg[1], &rlim) < 0)
-			tprints("{...}");
+			tprintf("{...}");
 		else {
 			tprintf("{rlim_cur=%s,", sprintrlim64(rlim.rlim_cur));
 			tprintf(" rlim_max=%s}", sprintrlim64(rlim.rlim_max));
@@ -239,11 +239,11 @@ sys_setrlimit64(struct tcb *tcp)
 
 	if (entering(tcp)) {
 		printxval(resources, tcp->u_arg[0], "RLIMIT_???");
-		tprints(", ");
+		tprintf(", ");
 		if (!verbose(tcp))
 			tprintf("%#lx", tcp->u_arg[1]);
 		else if (umove(tcp, tcp->u_arg[1], &rlim) < 0)
-			tprints("{...}");
+			tprintf("{...}");
 		else {
 			tprintf("{rlim_cur=%s,", sprintrlim64(rlim.rlim_cur));
 			tprintf(" rlim_max=%s}", sprintrlim64(rlim.rlim_max));
@@ -292,11 +292,11 @@ printrusage32(struct tcb *tcp, long addr)
 	} ru;
 
 	if (!addr)
-		tprints("NULL");
+		tprintf("NULL");
 	else if (syserror(tcp) || !verbose(tcp))
 		tprintf("%#lx", addr);
 	else if (umove(tcp, addr, &ru) < 0)
-		tprints("{...}");
+		tprintf("{...}");
 	else if (!abbrev(tcp)) {
 		tprintf("{ru_utime={%lu, %lu}, ru_stime={%lu, %lu}, ",
 			(long) ru.ru_utime.tv_sec, (long) ru.ru_utime.tv_usec,
@@ -328,11 +328,11 @@ printrusage(struct tcb *tcp, long addr)
 	struct rusage ru;
 
 	if (!addr)
-		tprints("NULL");
+		tprintf("NULL");
 	else if (syserror(tcp) || !verbose(tcp))
 		tprintf("%#lx", addr);
 	else if (umove(tcp, addr, &ru) < 0)
-		tprints("{...}");
+		tprintf("{...}");
 	else if (!abbrev(tcp)) {
 		tprintf("{ru_utime={%lu, %lu}, ru_stime={%lu, %lu}, ",
 			(long) ru.ru_utime.tv_sec, (long) ru.ru_utime.tv_usec,
@@ -362,7 +362,7 @@ sys_getrusage(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printxval(usagewho, tcp->u_arg[0], "RUSAGE_???");
-		tprints(", ");
+		tprintf(", ");
 	}
 	else
 		printrusage(tcp, tcp->u_arg[1]);
@@ -375,7 +375,7 @@ sys_osf_getrusage(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printxval(usagewho, tcp->u_arg[0], "RUSAGE_???");
-		tprints(", ");
+		tprintf(", ");
 	}
 	else
 		printrusage32(tcp, tcp->u_arg[1]);
@@ -396,7 +396,7 @@ sys_sysinfo(struct tcb *tcp)
 		if (syserror(tcp) || !verbose(tcp))
 			tprintf("%#lx", tcp->u_arg[0]);
 		else if (umove(tcp, tcp->u_arg[0], &si) < 0)
-			tprints("{...}");
+			tprintf("{...}");
 		else {
 			tprintf("{uptime=%lu, loads=[%lu, %lu, %lu] ",
 				si.uptime, si.loads[0], si.loads[1],
@@ -458,11 +458,11 @@ sys_times(struct tcb *tcp)
 
 	if (exiting(tcp)) {
 		if (tcp->u_arg[0] == 0)
-			tprints("NULL");
+			tprintf("NULL");
 		else if (syserror(tcp))
 			tprintf("%#lx", tcp->u_arg[0]);
 		else if (umove(tcp, tcp->u_arg[0], &tbuf) < 0)
-			tprints("{...}");
+			tprintf("{...}");
 		else {
 			tprintf("{tms_utime=%lu, tms_stime=%lu, ",
 				tbuf.tms_utime, tbuf.tms_stime);

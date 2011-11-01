@@ -47,16 +47,21 @@ static struct call_counts *countv[SUPPORTED_PERSONALITIES];
 
 static struct timeval shortest = { 1000000, 0 };
 
-void
+int
 count_syscall(struct tcb *tcp, struct timeval *tv)
 {
-	if (!SCNO_IN_RANGE(tcp->scno))
-		return;
+	if (tcp->scno < 0 || tcp->scno >= nsyscalls)
+		return 0;
 
-	if (!counts) {
+	if (!counts)
+	{
 		counts = calloc(nsyscalls, sizeof(*counts));
 		if (!counts)
-			die_out_of_memory();
+		{
+			fprintf(stderr,
+				"strace: out of memory for call counts\n");
+			exit(1);
+		}
 	}
 
 	counts[tcp->scno].calls++;
@@ -65,10 +70,12 @@ count_syscall(struct tcb *tcp, struct timeval *tv)
 
 	tv_sub(tv, tv, &tcp->etime);
 #ifdef LINUX
-	if (tv_cmp(tv, &tcp->dtime) > 0) {
+	if (tv_cmp(tv, &tcp->dtime) > 0)
+	{
 		static struct timeval one_tick;
 
-		if (one_tick.tv_usec == 0) {
+		if (one_tick.tv_usec == 0)
+		{
 			/* Initialize it.  */
 			struct itimerval it;
 
@@ -81,7 +88,8 @@ count_syscall(struct tcb *tcp, struct timeval *tv)
 
 		if (tv_nz(&tcp->dtime))
 			*tv = tcp->dtime;
-		else if (tv_cmp(tv, &one_tick) > 0) {
+		else if (tv_cmp(tv, &one_tick) > 0)
+		{
 			if (tv_cmp(&shortest, &one_tick) < 0)
 				*tv = shortest;
 			else
@@ -92,6 +100,8 @@ count_syscall(struct tcb *tcp, struct timeval *tv)
 	if (tv_cmp(tv, &shortest) < 0)
 		shortest = *tv;
 	tv_add(&counts[tcp->scno].time, &counts[tcp->scno].time, tv);
+
+	return 0;
 }
 
 static int
@@ -131,7 +141,8 @@ set_sortby(const char *sortby)
 		sortfun = syscall_cmp;
 	else if (strcmp(sortby, "nothing") == 0)
 		sortfun = NULL;
-	else {
+	else
+	{
 		fprintf(stderr, "invalid sortby: `%s'\n", sortby);
 		exit(1);
 	}
@@ -155,14 +166,19 @@ call_summary_pers(FILE *outf)
 	int    *sorted_count = calloc(sizeof(int), nsyscalls);
 
 	if (!sorted_count)
-		die_out_of_memory();
+	{
+		fprintf(stderr, "strace: out of memory for call summary\n");
+		return;
+	}
 
 	call_cum = error_cum = tv_cum.tv_sec = tv_cum.tv_usec = 0;
-	if (overhead.tv_sec == -1) {
+	if (overhead.tv_sec == -1)
+	{
 		tv_mul(&overhead, &shortest, 8);
 		tv_div(&overhead, &overhead, 10);
 	}
-	for (i = 0; i < nsyscalls; i++) {
+	for (i = 0; i < nsyscalls; i++)
+	{
 		sorted_count[i] = i;
 		if (counts == NULL || counts[i].calls == 0)
 			continue;
@@ -179,8 +195,10 @@ call_summary_pers(FILE *outf)
 		"calls", "errors", "syscall");
 	fprintf(outf, "%6.6s %11.11s %11.11s %9.9s %9.9s %-16.16s\n",
 		dashes, dashes, dashes, dashes, dashes, dashes);
-	if (counts) {
-		for (i = 0; i < nsyscalls; i++) {
+	if (counts)
+	{
+		for (i = 0; i < nsyscalls; i++)
+		{
 			j = sorted_count[i];
 			if (counts[j].calls == 0)
 				continue;
@@ -214,9 +232,10 @@ call_summary_pers(FILE *outf)
 void
 call_summary(FILE *outf)
 {
-	int i, old_pers = current_personality;
+	int     i, old_pers = current_personality;
 
-	for (i = 0; i < SUPPORTED_PERSONALITIES; ++i) {
+	for (i = 0; i < SUPPORTED_PERSONALITIES; ++i)
+	{
 		if (!countv[i])
 			continue;
 

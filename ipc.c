@@ -158,16 +158,17 @@ static const struct xlat semop_flags[] = {
 	{ 0,		NULL		},
 };
 
-int sys_msgget(struct tcb *tcp)
+int sys_msgget(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		if (tcp->u_arg[0])
 			tprintf("%#lx", tcp->u_arg[0]);
 		else
-			tprints("IPC_PRIVATE");
-		tprints(", ");
+			tprintf("IPC_PRIVATE");
+		tprintf(", ");
 		if (printflags(resource_flags, tcp->u_arg[1] & ~0777, NULL) != 0)
-			tprints("|");
+			tprintf("|");
 		tprintf("%#lo", tcp->u_arg[1] & 0777);
 	}
 	return 0;
@@ -175,14 +176,15 @@ int sys_msgget(struct tcb *tcp)
 
 #ifdef IPC_64
 # define PRINTCTL(flagset, arg, dflt) \
-	if ((arg) & IPC_64) tprints("IPC_64|"); \
+	if ((arg) & IPC_64) tprintf("IPC_64|"); \
 	printxval((flagset), (arg) &~ IPC_64, dflt)
 #else
 # define PRINTCTL printxval
 #endif
 
 static int
-indirect_ipccall(struct tcb *tcp)
+indirect_ipccall(tcp)
+struct tcb *tcp;
 {
 #ifdef LINUX
 #ifdef X86_64
@@ -198,7 +200,8 @@ indirect_ipccall(struct tcb *tcp)
 	return 0;
 }
 
-int sys_msgctl(struct tcb *tcp)
+int sys_msgctl(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		tprintf("%lu, ", tcp->u_arg[0]);
@@ -219,7 +222,7 @@ tprint_msgsnd(struct tcb *tcp, long addr, unsigned long count,
 	} else {
 		tprintf("{%lu, ", mtype);
 		printstr(tcp, addr + sizeof(mtype), count);
-		tprints("}");
+		tprintf("}");
 	}
 	tprintf(", %lu, ", count);
 	printflags(msg_flags, flags, "MSG_???");
@@ -250,7 +253,7 @@ tprint_msgrcv(struct tcb *tcp, long addr, unsigned long count, long msgtyp)
 	} else {
 		tprintf("{%lu, ", mtype);
 		printstr(tcp, addr + sizeof(mtype), count);
-		tprints("}");
+		tprintf("}");
 	}
 	tprintf(", %lu, %ld, ", count, msgtyp);
 }
@@ -298,13 +301,13 @@ tprint_sembuf(struct tcb *tcp, long addr, unsigned long count)
 		return;
 	}
 
-	for (i = 0; i < max_count; ++i) {
+	for(i = 0; i < max_count; ++i) {
 		struct sembuf sb;
 		if (i)
-			tprints(", ");
+			tprintf(", ");
 		if (umove(tcp, addr + i * sizeof(struct sembuf), &sb) < 0) {
 			if (i) {
-				tprints("{???}");
+				tprintf("{???}");
 				break;
 			} else {
 				tprintf("%#lx, %lu", addr, count);
@@ -312,15 +315,15 @@ tprint_sembuf(struct tcb *tcp, long addr, unsigned long count)
 			}
 		} else {
 			if (!i)
-				tprints("{");
+				tprintf("{");
 			tprintf("{%u, %d, ", sb.sem_num, sb.sem_op);
 			printflags(semop_flags, sb.sem_flg, "SEM_???");
-			tprints("}");
+			tprintf("}");
 		}
 	}
 
 	if (i < max_count || max_count < count)
-		tprints(", ...");
+		tprintf(", ...");
 
 	tprintf("}, %lu", count);
 }
@@ -345,11 +348,11 @@ int sys_semtimedop(struct tcb *tcp)
 		tprintf("%lu, ", tcp->u_arg[0]);
 		if (indirect_ipccall(tcp)) {
 			tprint_sembuf(tcp, tcp->u_arg[3], tcp->u_arg[1]);
-			tprints(", ");
+			tprintf(", ");
 			printtv(tcp, tcp->u_arg[5]);
 		} else {
 			tprint_sembuf(tcp, tcp->u_arg[1], tcp->u_arg[2]);
-			tprints(", ");
+			tprintf(", ");
 			printtv(tcp, tcp->u_arg[3]);
 		}
 	}
@@ -357,23 +360,25 @@ int sys_semtimedop(struct tcb *tcp)
 }
 #endif
 
-int sys_semget(struct tcb *tcp)
+int sys_semget(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		if (tcp->u_arg[0])
 			tprintf("%#lx", tcp->u_arg[0]);
 		else
-			tprints("IPC_PRIVATE");
+			tprintf("IPC_PRIVATE");
 		tprintf(", %lu", tcp->u_arg[1]);
-		tprints(", ");
+		tprintf(", ");
 		if (printflags(resource_flags, tcp->u_arg[2] & ~0777, NULL) != 0)
-			tprints("|");
+			tprintf("|");
 		tprintf("%#lo", tcp->u_arg[2] & 0777);
 	}
 	return 0;
 }
 
-int sys_semctl(struct tcb *tcp)
+int sys_semctl(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		tprintf("%lu", tcp->u_arg[0]);
@@ -384,23 +389,25 @@ int sys_semctl(struct tcb *tcp)
 	return 0;
 }
 
-int sys_shmget(struct tcb *tcp)
+int sys_shmget(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		if (tcp->u_arg[0])
 			tprintf("%#lx", tcp->u_arg[0]);
 		else
-			tprints("IPC_PRIVATE");
+			tprintf("IPC_PRIVATE");
 		tprintf(", %lu", tcp->u_arg[1]);
-		tprints(", ");
+		tprintf(", ");
 		if (printflags(shm_resource_flags, tcp->u_arg[2] & ~0777, NULL) != 0)
-			tprints("|");
+			tprintf("|");
 		tprintf("%#lo", tcp->u_arg[2] & 0777);
 	}
 	return 0;
 }
 
-int sys_shmctl(struct tcb *tcp)
+int sys_shmctl(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		tprintf("%lu, ", tcp->u_arg[0]);
@@ -414,7 +421,8 @@ int sys_shmctl(struct tcb *tcp)
 	return 0;
 }
 
-int sys_shmat(struct tcb *tcp)
+int sys_shmat(tcp)
+struct tcb *tcp;
 {
 #ifdef LINUX
 	unsigned long raddr;
@@ -424,11 +432,11 @@ int sys_shmat(struct tcb *tcp)
 		tprintf("%lu", tcp->u_arg[0]);
 		if (indirect_ipccall(tcp)) {
 			tprintf(", %#lx", tcp->u_arg[3]);
-			tprints(", ");
+			tprintf(", ");
 			printflags(shm_flags, tcp->u_arg[1], "SHM_???");
 		} else {
 			tprintf(", %#lx", tcp->u_arg[1]);
-			tprints(", ");
+			tprintf(", ");
 			printflags(shm_flags, tcp->u_arg[2], "SHM_???");
 		}
 		if (syserror(tcp))
@@ -444,7 +452,8 @@ int sys_shmat(struct tcb *tcp)
 	return 0;
 }
 
-int sys_shmdt(struct tcb *tcp)
+int sys_shmdt(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		if (indirect_ipccall(tcp)) {
@@ -464,7 +473,7 @@ sys_mq_open(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		/* flags */
 		tprint_open_modes(tcp->u_arg[1]);
 		if (tcp->u_arg[1] & O_CREAT) {
@@ -475,7 +484,7 @@ sys_mq_open(struct tcb *tcp)
 			/* mode */
 			tprintf(", %#lo, ", tcp->u_arg[2]);
 			if (umove(tcp, tcp->u_arg[3], &attr) < 0)
-				tprints("{ ??? }");
+				tprintf("{ ??? }");
 			else
 				tprintf("{mq_maxmsg=%ld, mq_msgsize=%ld}",
 					attr.mq_maxmsg, attr.mq_msgsize);
@@ -524,17 +533,17 @@ static void
 printmqattr(struct tcb *tcp, long addr)
 {
 	if (addr == 0)
-		tprints("NULL");
+		tprintf("NULL");
 	else {
 # ifndef HAVE_MQUEUE_H
 		tprintf("%#lx", addr);
 # else
 		struct mq_attr attr;
 		if (umove(tcp, addr, &attr) < 0) {
-			tprints("{...}");
+			tprintf("{...}");
 			return;
 		}
-		tprints("{mq_flags=");
+		tprintf("{mq_flags=");
 		tprint_open_modes(attr.mq_flags);
 		tprintf(", mq_maxmsg=%ld, mq_msgsize=%ld, mq_curmsg=%ld}",
 			attr.mq_maxmsg, attr.mq_msgsize, attr.mq_curmsgs);
@@ -548,7 +557,7 @@ sys_mq_getsetattr(struct tcb *tcp)
 	if (entering(tcp)) {
 		tprintf("%ld, ", tcp->u_arg[0]);
 		printmqattr(tcp, tcp->u_arg[1]);
-		tprints(", ");
+		tprintf(", ");
 	} else
 		printmqattr(tcp, tcp->u_arg[2]);
 	return 0;

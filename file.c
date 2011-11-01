@@ -257,17 +257,17 @@ const struct xlat open_mode_flags[] = {
 #  endif
 # endif
 # ifdef O_LARGEFILE
-	{ O_LARGEFILE,	"O_LARGEFILE"	},
+	{ O_LARGEFILE,	"O_LARGEFILE"   },
 # endif
 #endif
 #ifdef O_DIRECTORY
-	{ O_DIRECTORY,	"O_DIRECTORY"	},
+	{ O_DIRECTORY,	"O_DIRECTORY"   },
 #endif
 #ifdef O_NOFOLLOW
-	{ O_NOFOLLOW,	"O_NOFOLLOW"	},
+	{ O_NOFOLLOW, 	"O_NOFOLLOW"	},
 #endif
 #ifdef O_NOATIME
-	{ O_NOATIME,	"O_NOATIME"	},
+	{ O_NOATIME, 	"O_NOATIME"	},
 #endif
 #ifdef O_CLOEXEC
 	{ O_CLOEXEC,	"O_CLOEXEC"	},
@@ -334,13 +334,25 @@ static void
 print_dirfd(struct tcb *tcp, int fd)
 {
 	if (fd == AT_FDCWD)
-		tprints("AT_FDCWD, ");
-	else {
+		tprintf("AT_FDCWD, ");
+	else
+	{
 		printfd(tcp, fd);
-		tprints(", ");
+		tprintf(", ");
 	}
 }
 #endif
+
+/*
+ * Pity stpcpy() is not standardized...
+ */
+static char *
+str_append(char *dst, const char *src)
+{
+	while ((*dst = *src++) != '\0')
+		dst++;
+	return dst;
+}
 
 /*
  * low bits of the open(2) flags define access mode,
@@ -355,10 +367,10 @@ sprint_open_modes(mode_t flags)
 	const char *str;
 	const struct xlat *x;
 
-	p = stpcpy(outstr, "flags ");
+	p = str_append(outstr, "flags ");
 	str = xlookup(open_access_modes, flags & 3);
 	if (str) {
-		p = stpcpy(p, str);
+		p = str_append(p, str);
 		flags &= ~3;
 		if (!flags)
 			return outstr;
@@ -369,7 +381,7 @@ sprint_open_modes(mode_t flags)
 		if ((flags & x->val) == x->val) {
 			if (sep)
 				*p++ = sep;
-			p = stpcpy(p, x->str);
+			p = str_append(p, x->str);
 			flags &= ~x->val;
 			if (!flags)
 				return outstr;
@@ -386,7 +398,7 @@ sprint_open_modes(mode_t flags)
 void
 tprint_open_modes(mode_t flags)
 {
-	tprints(sprint_open_modes(flags) + sizeof("flags"));
+	tprintf("%s", sprint_open_modes(flags) + sizeof("flags"));
 }
 
 static int
@@ -394,7 +406,7 @@ decode_open(struct tcb *tcp, int offset)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[offset]);
-		tprints(", ");
+		tprintf(", ");
 		/* flags */
 		tprint_open_modes(tcp->u_arg[offset + 1]);
 		if (tcp->u_arg[offset + 1] & O_CREAT) {
@@ -445,7 +457,7 @@ solaris_open(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		/* flags */
 		printflags(openmodessol, tcp->u_arg[1] + 1, "O_???");
 		if (tcp->u_arg[1] & 0x100) {
@@ -487,7 +499,7 @@ decode_access(struct tcb *tcp, int offset)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[offset]);
-		tprints(", ");
+		tprintf(", ");
 		printflags(access_flags, tcp->u_arg[offset + 1], "?_OK");
 	}
 	return 0;
@@ -535,7 +547,7 @@ sys_lseek(struct tcb *tcp)
 
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		offset = tcp->ext_arg[1];
 		_whence = tcp->u_arg[2];
 		if (_whence == SEEK_SET)
@@ -555,7 +567,7 @@ sys_lseek(struct tcb *tcp)
 
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		offset = tcp->u_arg[1];
 		_whence = tcp->u_arg[2];
 		if (_whence == SEEK_SET)
@@ -606,7 +618,7 @@ sys_readahead(struct tcb *tcp)
 	if (entering(tcp)) {
 		int argn;
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		argn = printllval(tcp, "%lld", 1);
 		tprintf(", %ld", tcp->u_arg[argn]);
 	}
@@ -621,7 +633,7 @@ sys_lseek64(struct tcb *tcp)
 	if (entering(tcp)) {
 		int argn;
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		if (tcp->u_arg[3] == SEEK_SET)
 			argn = printllval(tcp, "%llu, ", 1);
 		else
@@ -674,7 +686,7 @@ sys_ftruncate64(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printllval(tcp, "%llu", 1);
 	}
 	return 0;
@@ -727,8 +739,7 @@ sprinttime(time_t t)
 		strcpy(buf, "0");
 		return buf;
 	}
-	tmp = localtime(&t);
-	if (tmp)
+	if ((tmp = localtime(&t)))
 		snprintf(buf, sizeof buf, "%02d/%02d/%02d-%02d:%02d:%02d",
 			tmp->tm_year + 1900, tmp->tm_mon + 1, tmp->tm_mday,
 			tmp->tm_hour, tmp->tm_min, tmp->tm_sec);
@@ -771,7 +782,7 @@ printstatsol(struct tcb *tcp, long addr)
 	struct solstat statbuf;
 
 	if (umove(tcp, addr, &statbuf) < 0) {
-		tprints("{...}");
+		tprintf("{...}");
 		return;
 	}
 	if (!abbrev(tcp)) {
@@ -805,7 +816,7 @@ printstatsol(struct tcb *tcp, long addr)
 		tprintf("st_ctime=%s}", sprinttime(statbuf.st_ctime.tv_sec));
 	}
 	else
-		tprints("...}");
+		tprintf("...}");
 }
 
 #if defined (SPARC64)
@@ -815,7 +826,7 @@ printstat_sparc64(struct tcb *tcp, long addr)
 	struct stat_sparc64 statbuf;
 
 	if (umove(tcp, addr, &statbuf) < 0) {
-		tprints("{...}");
+		tprintf("{...}");
 		return;
 	}
 
@@ -850,10 +861,10 @@ printstat_sparc64(struct tcb *tcp, long addr)
 		tprintf("st_atime=%s, ", sprinttime(statbuf.st_atime));
 		tprintf("st_mtime=%s, ", sprinttime(statbuf.st_mtime));
 		tprintf("st_ctime=%s", sprinttime(statbuf.st_ctime));
-		tprints("}");
+		tprintf("}");
 	}
 	else
-		tprints("...}");
+		tprintf("...}");
 }
 #endif /* SPARC64 */
 #endif /* LINUXSPARC */
@@ -886,7 +897,7 @@ printstat_powerpc32(struct tcb *tcp, long addr)
 	struct stat_powerpc32 statbuf;
 
 	if (umove(tcp, addr, &statbuf) < 0) {
-		tprints("{...}");
+		tprintf("{...}");
 		return;
 	}
 
@@ -916,10 +927,10 @@ printstat_powerpc32(struct tcb *tcp, long addr)
 		tprintf("st_atime=%s, ", sprinttime(statbuf.st_atime));
 		tprintf("st_mtime=%s, ", sprinttime(statbuf.st_mtime));
 		tprintf("st_ctime=%s", sprinttime(statbuf.st_ctime));
-		tprints("}");
+		tprintf("}");
 	}
 	else
-		tprints("...}");
+		tprintf("...}");
 }
 #endif /* LINUX && POWERPC64 */
 
@@ -935,11 +946,11 @@ static const struct xlat fileflags[] = {
 	{ SF_APPEND,	"SF_APPEND"	},
 	{ SF_NOUNLINK,	"SF_NOUNLINK"	},
 #elif UNIXWARE >= 2
-#ifdef _S_ISMLD
-	{ _S_ISMLD,	"_S_ISMLD"	},
+#ifdef 	_S_ISMLD
+	{ _S_ISMLD, 	"_S_ISMLD"	},
 #endif
-#ifdef _S_ISMOUNTED
-	{ _S_ISMOUNTED,	"_S_ISMOUNTED"	},
+#ifdef 	_S_ISMOUNTED
+	{ _S_ISMOUNTED, "_S_ISMOUNTED"	},
 #endif
 #endif
 	{ 0,		NULL		},
@@ -951,7 +962,7 @@ sys_chflags(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printflags(fileflags, tcp->u_arg[1], "UF_???");
 	}
 	return 0;
@@ -1012,7 +1023,7 @@ realprintstat(struct tcb *tcp, struct stat *statbuf)
 		tprintf("st_mtime=%s, ", sprinttime(statbuf->st_mtime));
 		tprintf("st_ctime=%s", sprinttime(statbuf->st_ctime));
 #if HAVE_STRUCT_STAT_ST_FLAGS
-		tprints(", st_flags=");
+		tprintf(", st_flags=");
 		printflags(fileflags, statbuf->st_flags, "UF_???");
 #endif
 #if HAVE_STRUCT_STAT_ST_ACLCNT
@@ -1028,10 +1039,10 @@ realprintstat(struct tcb *tcp, struct stat *statbuf)
 #if HAVE_STRUCT_STAT_ST_GEN
 		tprintf(", st_gen=%u", statbuf->st_gen);
 #endif
-		tprints("}");
+		tprintf("}");
 	}
 	else
-		tprints("...}");
+		tprintf("...}");
 }
 
 
@@ -1041,7 +1052,7 @@ printstat(struct tcb *tcp, long addr)
 	struct stat statbuf;
 
 	if (!addr) {
-		tprints("NULL");
+		tprintf("NULL");
 		return;
 	}
 	if (syserror(tcp) || !verbose(tcp)) {
@@ -1070,7 +1081,7 @@ printstat(struct tcb *tcp, long addr)
 #endif
 
 	if (umove(tcp, addr, &statbuf) < 0) {
-		tprints("{...}");
+		tprintf("{...}");
 		return;
 	}
 
@@ -1121,7 +1132,7 @@ printstat64(struct tcb *tcp, long addr)
 #endif
 
 	if (!addr) {
-		tprints("NULL");
+		tprintf("NULL");
 		return;
 	}
 	if (syserror(tcp) || !verbose(tcp)) {
@@ -1150,7 +1161,7 @@ printstat64(struct tcb *tcp, long addr)
 #endif
 
 	if (umove(tcp, addr, &statbuf) < 0) {
-		tprints("{...}");
+		tprintf("{...}");
 		return;
 	}
 
@@ -1207,7 +1218,7 @@ printstat64(struct tcb *tcp, long addr)
 		tprintf("st_mtime=%s, ", sprinttime(statbuf.st_mtime));
 		tprintf("st_ctime=%s", sprinttime(statbuf.st_ctime));
 #if HAVE_STRUCT_STAT_ST_FLAGS
-		tprints(", st_flags=");
+		tprintf(", st_flags=");
 		printflags(fileflags, statbuf.st_flags, "UF_???");
 #endif
 #if HAVE_STRUCT_STAT_ST_ACLCNT
@@ -1223,10 +1234,10 @@ printstat64(struct tcb *tcp, long addr)
 #if HAVE_STRUCT_STAT_ST_GEN
 		tprintf(", st_gen=%u", statbuf.st_gen);
 #endif
-		tprints("}");
+		tprintf("}");
 	}
 	else
-		tprints("...}");
+		tprintf("...}");
 }
 #endif /* HAVE_STAT64 */
 
@@ -1257,7 +1268,7 @@ printoldstat(struct tcb *tcp, long addr)
 	struct stat newstatbuf;
 
 	if (!addr) {
-		tprints("NULL");
+		tprintf("NULL");
 		return;
 	}
 	if (syserror(tcp) || !verbose(tcp)) {
@@ -1273,7 +1284,7 @@ printoldstat(struct tcb *tcp, long addr)
 #endif /* LINUXSPARC */
 
 	if (umove(tcp, addr, &statbuf) < 0) {
-		tprints("{...}");
+		tprintf("{...}");
 		return;
 	}
 
@@ -1288,7 +1299,7 @@ sys_stat(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		printstat(tcp, tcp->u_arg[1]);
 	}
@@ -1302,7 +1313,7 @@ sys_stat64(struct tcb *tcp)
 #ifdef HAVE_STAT64
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		printstat64(tcp, tcp->u_arg[1]);
 	}
@@ -1328,7 +1339,7 @@ sys_newfstatat(struct tcb *tcp)
 	if (entering(tcp)) {
 		print_dirfd(tcp, tcp->u_arg[0]);
 		printpath(tcp, tcp->u_arg[1]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 #ifdef POWERPC64
 		if (current_personality == 0)
@@ -1340,7 +1351,7 @@ sys_newfstatat(struct tcb *tcp)
 #else
 		printstat(tcp, tcp->u_arg[2]);
 #endif
-		tprints(", ");
+		tprintf(", ");
 		printflags(fstatatflags, tcp->u_arg[3], "AT_???");
 	}
 	return 0;
@@ -1353,7 +1364,7 @@ sys_oldstat(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		printoldstat(tcp, tcp->u_arg[1]);
 	}
@@ -1367,7 +1378,7 @@ sys_fstat(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		printstat(tcp, tcp->u_arg[1]);
 	}
@@ -1381,7 +1392,7 @@ sys_fstat64(struct tcb *tcp)
 #ifdef HAVE_STAT64
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		printstat64(tcp, tcp->u_arg[1]);
 	}
@@ -1397,7 +1408,7 @@ sys_oldfstat(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		printoldstat(tcp, tcp->u_arg[1]);
 	}
@@ -1411,7 +1422,7 @@ sys_lstat(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		printstat(tcp, tcp->u_arg[1]);
 	}
@@ -1425,7 +1436,7 @@ sys_lstat64(struct tcb *tcp)
 #ifdef HAVE_STAT64
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		printstat64(tcp, tcp->u_arg[1]);
 	}
@@ -1441,7 +1452,7 @@ sys_oldlstat(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		printoldstat(tcp, tcp->u_arg[1]);
 	}
@@ -1458,7 +1469,7 @@ sys_xstat(struct tcb *tcp)
 	if (entering(tcp)) {
 		tprintf("%ld, ", tcp->u_arg[0]);
 		printpath(tcp, tcp->u_arg[1]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 #ifdef _STAT64_VER
 		if (tcp->u_arg[0] == _STAT64_VER)
@@ -1492,7 +1503,7 @@ sys_lxstat(struct tcb *tcp)
 	if (entering(tcp)) {
 		tprintf("%ld, ", tcp->u_arg[0]);
 		printpath(tcp, tcp->u_arg[1]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 #ifdef _STAT64_VER
 		if (tcp->u_arg[0] == _STAT64_VER)
@@ -1563,7 +1574,7 @@ sys_acl(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printxval(aclcmds, tcp->u_arg[1], "???ACL???");
 		tprintf(", %ld", tcp->u_arg[2]);
 		/*
@@ -1573,7 +1584,7 @@ sys_acl(struct tcb *tcp)
 		if (tcp->u_arg[3])
 			tprintf(", %#lx", tcp->u_arg[3]);
 		else
-			tprints(", NULL");
+			tprintf(", NULL");
 	}
 	return 0;
 }
@@ -1593,7 +1604,7 @@ sys_facl(struct tcb *tcp)
 		if (tcp->u_arg[3])
 			tprintf(", %#lx", tcp->u_arg[3]);
 		else
-			tprints(", NULL");
+			tprintf(", NULL");
 	}
 	return 0;
 }
@@ -1628,7 +1639,7 @@ sys_aclipc(struct tcb *tcp)
 		if (tcp->u_arg[4])
 			tprintf(", %#lx", tcp->u_arg[4]);
 		else
-			tprints(", NULL");
+			tprintf(", NULL");
 	}
 	return 0;
 }
@@ -1703,7 +1714,7 @@ printstatfs(struct tcb *tcp, long addr)
 		return;
 	}
 	if (umove(tcp, addr, &statbuf) < 0) {
-		tprints("{...}");
+		tprintf("{...}");
 		return;
 	}
 #ifdef ALPHA
@@ -1712,7 +1723,7 @@ printstatfs(struct tcb *tcp, long addr)
 		sprintfstype(statbuf.f_type),
 		statbuf.f_bsize, statbuf.f_blocks, statbuf.f_bfree);
 	tprintf("f_bavail=%u, f_files=%u, f_ffree=%u, f_fsid={%d, %d}, f_namelen=%u",
-		statbuf.f_bavail, statbuf.f_files, statbuf.f_ffree,
+		statbuf.f_bavail,statbuf.f_files, statbuf.f_ffree,
 		statbuf.f_fsid.__val[0], statbuf.f_fsid.__val[1],
 		statbuf.f_namelen);
 #else /* !ALPHA */
@@ -1733,7 +1744,7 @@ printstatfs(struct tcb *tcp, long addr)
 #ifdef _STATFS_F_FRSIZE
 	tprintf(", f_frsize=%lu", (unsigned long)statbuf.f_frsize);
 #endif
-	tprints("}");
+	tprintf("}");
 }
 
 int
@@ -1741,7 +1752,7 @@ sys_statfs(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		printstatfs(tcp, tcp->u_arg[1]);
 	}
@@ -1753,7 +1764,7 @@ sys_fstatfs(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		printstatfs(tcp, tcp->u_arg[1]);
 	}
@@ -1771,7 +1782,7 @@ printstatfs64(struct tcb *tcp, long addr)
 		return;
 	}
 	if (umove(tcp, addr, &statbuf) < 0) {
-		tprints("{...}");
+		tprintf("{...}");
 		return;
 	}
 	tprintf("{f_type=%s, f_bsize=%llu, f_blocks=%llu, f_bfree=%llu, ",
@@ -1788,7 +1799,7 @@ printstatfs64(struct tcb *tcp, long addr)
 #ifdef _STATFS_F_FRSIZE
 	tprintf(", f_frsize=%llu", (unsigned long long)statbuf.f_frsize);
 #endif
-	tprints("}");
+	tprintf("}");
 }
 
 int
@@ -1798,10 +1809,10 @@ sys_statfs64(struct tcb *tcp)
 		printpath(tcp, tcp->u_arg[0]);
 		tprintf(", %lu, ", tcp->u_arg[1]);
 	} else {
-		if (tcp->u_arg[1] == sizeof(struct statfs64))
+		if (tcp->u_arg[1] == sizeof (struct statfs64))
 			printstatfs64(tcp, tcp->u_arg[2]);
 		else
-			tprints("{???}");
+			tprintf("{???}");
 	}
 	return 0;
 }
@@ -1813,10 +1824,10 @@ sys_fstatfs64(struct tcb *tcp)
 		printfd(tcp, tcp->u_arg[0]);
 		tprintf(", %lu, ", tcp->u_arg[1]);
 	} else {
-		if (tcp->u_arg[1] == sizeof(struct statfs64))
+		if (tcp->u_arg[1] == sizeof (struct statfs64))
 			printstatfs64(tcp, tcp->u_arg[2]);
 		else
-			tprints("{???}");
+			tprintf("{???}");
 	}
 	return 0;
 }
@@ -1829,7 +1840,7 @@ osf_statfs(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		printstatfs(tcp, tcp->u_arg[1]);
 		tprintf(", %lu", tcp->u_arg[2]);
@@ -1867,7 +1878,7 @@ sys_ustat(struct tcb *tcp)
 		if (syserror(tcp) || !verbose(tcp))
 			tprintf("%#lx", tcp->u_arg[1]);
 		else if (umove(tcp, tcp->u_arg[1], &statbuf) < 0)
-			tprints("{...}");
+			tprintf("{...}");
 		else {
 			tprintf("{f_tfree=%lu, f_tinode=%lu, ",
 				statbuf.f_tfree, statbuf.f_tinode);
@@ -1888,7 +1899,7 @@ sys_pivotroot(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printpath(tcp, tcp->u_arg[1]);
 	}
 	return 0;
@@ -1974,7 +1985,7 @@ sys_link(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printpath(tcp, tcp->u_arg[1]);
 	}
 	return 0;
@@ -1987,10 +1998,10 @@ sys_linkat(struct tcb *tcp)
 	if (entering(tcp)) {
 		print_dirfd(tcp, tcp->u_arg[0]);
 		printpath(tcp, tcp->u_arg[1]);
-		tprints(", ");
+		tprintf(", ");
 		print_dirfd(tcp, tcp->u_arg[2]);
 		printpath(tcp, tcp->u_arg[3]);
-		tprints(", ");
+		tprintf(", ");
 		printfd(tcp, tcp->u_arg[4]);
 	}
 	return 0;
@@ -2021,7 +2032,7 @@ sys_unlinkat(struct tcb *tcp)
 	if (entering(tcp)) {
 		print_dirfd(tcp, tcp->u_arg[0]);
 		printpath(tcp, tcp->u_arg[1]);
-		tprints(", ");
+		tprintf(", ");
 		printflags(unlinkatflags, tcp->u_arg[2], "AT_???");
 	}
 	return 0;
@@ -2033,7 +2044,7 @@ sys_symlink(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printpath(tcp, tcp->u_arg[1]);
 	}
 	return 0;
@@ -2045,7 +2056,7 @@ sys_symlinkat(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		print_dirfd(tcp, tcp->u_arg[1]);
 		printpath(tcp, tcp->u_arg[2]);
 	}
@@ -2058,7 +2069,7 @@ decode_readlink(struct tcb *tcp, int offset)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[offset]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		if (syserror(tcp))
 			tprintf("%#lx", tcp->u_arg[offset + 1]);
@@ -2090,7 +2101,7 @@ sys_rename(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printpath(tcp, tcp->u_arg[1]);
 	}
 	return 0;
@@ -2103,7 +2114,7 @@ sys_renameat(struct tcb *tcp)
 	if (entering(tcp)) {
 		print_dirfd(tcp, tcp->u_arg[0]);
 		printpath(tcp, tcp->u_arg[1]);
-		tprints(", ");
+		tprintf(", ");
 		print_dirfd(tcp, tcp->u_arg[2]);
 		printpath(tcp, tcp->u_arg[3]);
 	}
@@ -2131,7 +2142,7 @@ sys_fchownat(struct tcb *tcp)
 		printpath(tcp, tcp->u_arg[1]);
 		printuid(", ", tcp->u_arg[2]);
 		printuid(", ", tcp->u_arg[3]);
-		tprints(", ");
+		tprintf(", ");
 		printflags(fstatatflags, tcp->u_arg[4], "AT_???");
 	}
 	return 0;
@@ -2191,7 +2202,7 @@ sys_osf_utimes(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printtv_bitness(tcp, tcp->u_arg[1], BITNESS_32,  0);
 	}
 	return 0;
@@ -2203,18 +2214,18 @@ decode_utimes(struct tcb *tcp, int offset, int special)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[offset]);
-		tprints(", ");
+		tprintf(", ");
 		if (tcp->u_arg[offset + 1] == 0)
-			tprints("NULL");
+			tprintf("NULL");
 		else {
-			tprints("{");
+			tprintf("{");
 			printtv_bitness(tcp, tcp->u_arg[offset + 1],
 					BITNESS_CURRENT, special);
-			tprints(", ");
+			tprintf(", ");
 			printtv_bitness(tcp, tcp->u_arg[offset + 1]
-					+ sizeof(struct timeval),
+					+ sizeof (struct timeval),
 					BITNESS_CURRENT, special);
-			tprints("}");
+			tprintf("}");
 		}
 	}
 	return 0;
@@ -2241,7 +2252,7 @@ sys_utimensat(struct tcb *tcp)
 	if (entering(tcp)) {
 		print_dirfd(tcp, tcp->u_arg[0]);
 		decode_utimes(tcp, 1, 1);
-		tprints(", ");
+		tprintf(", ");
 		printflags(utimensatflags, tcp->u_arg[3], "AT_???");
 	}
 	return 0;
@@ -2258,15 +2269,15 @@ sys_utime(struct tcb *tcp)
 
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		if (!tcp->u_arg[1])
-			tprints("NULL");
+			tprintf("NULL");
 		else if (!verbose(tcp))
 			tprintf("%#lx", tcp->u_arg[1]);
 		else if (umoven(tcp, tcp->u_arg[1],
 				2 * personality_wordsize[current_personality],
 				(char *) &u) < 0)
-			tprints("[?, ?]");
+			tprintf("[?, ?]");
 		else if (personality_wordsize[current_personality]
 			 == sizeof u.utl[0]) {
 			tprintf("[%s,", sprinttime(u.utl[0]));
@@ -2360,13 +2371,13 @@ printdir(struct tcb *tcp, long addr)
 		return;
 	}
 	if (umove(tcp, addr, &d) < 0) {
-		tprints("{...}");
+		tprintf("{...}");
 		return;
 	}
 	tprintf("{d_ino=%ld, ", (unsigned long) d.d_ino);
-	tprints("d_name=");
+	tprintf("d_name=");
 	printpathn(tcp, (long) ((struct dirent *) addr)->d_name, d.d_reclen);
-	tprints("}");
+	tprintf("}");
 }
 
 int
@@ -2374,7 +2385,7 @@ sys_readdir(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		if (syserror(tcp) || tcp->u_rval == 0 || !verbose(tcp))
 			tprintf("%#lx", tcp->u_arg[1]);
@@ -2391,15 +2402,15 @@ sys_readdir(struct tcb *tcp)
 
 #if defined FREEBSD || defined LINUX
 static const struct xlat direnttypes[] = {
-	{ DT_UNKNOWN,	"DT_UNKNOWN"	},
-	{ DT_FIFO,	"DT_FIFO"	},
-	{ DT_CHR,	"DT_CHR"	},
-	{ DT_DIR,	"DT_DIR"	},
-	{ DT_BLK,	"DT_BLK"	},
-	{ DT_REG,	"DT_REG"	},
-	{ DT_LNK,	"DT_LNK"	},
-	{ DT_SOCK,	"DT_SOCK"	},
-	{ DT_WHT,	"DT_WHT"	},
+	{ DT_UNKNOWN,	"DT_UNKNOWN" 	},
+	{ DT_FIFO,	"DT_FIFO" 	},
+	{ DT_CHR,	"DT_CHR" 	},
+	{ DT_DIR,	"DT_DIR" 	},
+	{ DT_BLK,	"DT_BLK" 	},
+	{ DT_REG,	"DT_REG" 	},
+	{ DT_LNK,	"DT_LNK" 	},
+	{ DT_SOCK,	"DT_SOCK" 	},
+	{ DT_WHT,	"DT_WHT" 	},
 	{ 0,		NULL		},
 };
 
@@ -2413,7 +2424,7 @@ sys_getdents(struct tcb *tcp)
 
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		return 0;
 	}
 	if (syserror(tcp) || !verbose(tcp)) {
@@ -2421,21 +2432,19 @@ sys_getdents(struct tcb *tcp)
 		return 0;
 	}
 	len = tcp->u_rval;
-	/* Beware of insanely large or negative values in tcp->u_rval */
-	if (tcp->u_rval > 1024*1024)
-		len = 1024*1024;
-	if (tcp->u_rval < 0)
-		len = 0;
 	buf = len ? malloc(len) : NULL;
-	if (len && !buf)
-		die_out_of_memory();
+	if (len && !buf) {
+		tprintf("%#lx, %lu", tcp->u_arg[1], tcp->u_arg[2]);
+		fprintf(stderr, "out of memory\n");
+		return 0;
+	}
 	if (umoven(tcp, tcp->u_arg[1], len, buf) < 0) {
 		tprintf("%#lx, %lu", tcp->u_arg[1], tcp->u_arg[2]);
 		free(buf);
 		return 0;
 	}
 	if (!abbrev(tcp))
-		tprints("{");
+		tprintf("{");
 	for (i = 0; i < len;) {
 		struct kernel_dirent *d = (struct kernel_dirent *) &buf[i];
 #ifdef LINUX
@@ -2475,14 +2484,14 @@ sys_getdents(struct tcb *tcp)
 		}
 #endif /* FREEBSD */
 		if (!d->d_reclen) {
-			tprints("/* d_reclen == 0, problem here */");
+			tprintf("/* d_reclen == 0, problem here */");
 			break;
 		}
 		i += d->d_reclen;
 		dents++;
 	}
 	if (!abbrev(tcp))
-		tprints("}");
+		tprintf("}");
 	else
 		tprintf("/* %u entries */", dents);
 	tprintf(", %lu", tcp->u_arg[2]);
@@ -2500,31 +2509,27 @@ sys_getdents64(struct tcb *tcp)
 
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		return 0;
 	}
 	if (syserror(tcp) || !verbose(tcp)) {
 		tprintf("%#lx, %lu", tcp->u_arg[1], tcp->u_arg[2]);
 		return 0;
 	}
-
 	len = tcp->u_rval;
-	/* Beware of insanely large or negative tcp->u_rval */
-	if (tcp->u_rval > 1024*1024)
-		len = 1024*1024;
-	if (tcp->u_rval < 0)
-		len = 0;
 	buf = len ? malloc(len) : NULL;
-	if (len && !buf)
-		die_out_of_memory();
-
+	if (len && !buf) {
+		tprintf("%#lx, %lu", tcp->u_arg[1], tcp->u_arg[2]);
+		fprintf(stderr, "out of memory\n");
+		return 0;
+	}
 	if (umoven(tcp, tcp->u_arg[1], len, buf) < 0) {
 		tprintf("%#lx, %lu", tcp->u_arg[1], tcp->u_arg[2]);
 		free(buf);
 		return 0;
 	}
 	if (!abbrev(tcp))
-		tprints("{");
+		tprintf("{");
 	for (i = 0; i < len;) {
 		struct dirent64 *d = (struct dirent64 *) &buf[i];
 #if defined(LINUX) || defined(SVR4)
@@ -2534,9 +2539,9 @@ sys_getdents64(struct tcb *tcp)
 				d->d_ino,
 				d->d_off);
 #ifdef LINUX
-			tprints("d_type=");
+			tprintf("d_type=");
 			printxval(direnttypes, d->d_type, "DT_???");
-			tprints(", ");
+			tprintf(", ");
 #endif
 			tprintf("d_reclen=%u, d_name=\"%s\"}",
 				d->d_reclen, d->d_name);
@@ -2552,14 +2557,14 @@ sys_getdents64(struct tcb *tcp)
 		}
 #endif /* SUNOS4 */
 		if (!d->d_reclen) {
-			tprints("/* d_reclen == 0, problem here */");
+			tprintf("/* d_reclen == 0, problem here */");
 			break;
 		}
 		i += d->d_reclen;
 		dents++;
 	}
 	if (!abbrev(tcp))
-		tprints("}");
+		tprintf("}");
 	else
 		tprintf("/* %u entries */", dents);
 	tprintf(", %lu", tcp->u_arg[2]);
@@ -2578,31 +2583,26 @@ sys_getdirentries(struct tcb *tcp)
 
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		return 0;
 	}
 	if (syserror(tcp) || !verbose(tcp)) {
 		tprintf("%#lx, %lu, %#lx", tcp->u_arg[1], tcp->u_arg[2], tcp->u_arg[3]);
 		return 0;
 	}
-
 	len = tcp->u_rval;
-	/* Beware of insanely large or negative tcp->u_rval */
-	if (tcp->u_rval > 1024*1024)
-		len = 1024*1024;
-	if (tcp->u_rval < 0)
-		len = 0;
-	buf = malloc(len);
-	if (!buf)
-		die_out_of_memory();
-
+	if ((buf = malloc(len)) == NULL) {
+		tprintf("%#lx, %lu, %#lx", tcp->u_arg[1], tcp->u_arg[2], tcp->u_arg[3]);
+		fprintf(stderr, "out of memory\n");
+		return 0;
+	}
 	if (umoven(tcp, tcp->u_arg[1], len, buf) < 0) {
 		tprintf("%#lx, %lu, %#lx", tcp->u_arg[1], tcp->u_arg[2], tcp->u_arg[3]);
 		free(buf);
 		return 0;
 	}
 	if (!abbrev(tcp))
-		tprints("{");
+		tprintf("{");
 	for (i = 0; i < len;) {
 		struct kernel_dirent *d = (struct kernel_dirent *) &buf[i];
 		if (!abbrev(tcp)) {
@@ -2613,14 +2613,14 @@ sys_getdirentries(struct tcb *tcp)
 				d->d_namlen, d->d_namlen, d->d_name);
 		}
 		if (!d->d_reclen) {
-			tprints("/* d_reclen == 0, problem here */");
+			tprintf("/* d_reclen == 0, problem here */");
 			break;
 		}
 		i += d->d_reclen;
 		dents++;
 	}
 	if (!abbrev(tcp))
-		tprints("}");
+		tprintf("}");
 	else
 		tprintf("/* %u entries */", dents);
 	free(buf);
@@ -2702,7 +2702,7 @@ sys_aiowrite(struct tcb *tcp)
 	}
 	else {
 		if (tcp->u_arg[5] == 0)
-			tprints(", NULL");
+			tprintf(", NULL");
 		else if (syserror(tcp)
 		    || umove(tcp, tcp->u_arg[5], &res) < 0)
 			tprintf(", %#lx", tcp->u_arg[5]);
@@ -2728,7 +2728,7 @@ sys_aiocancel(struct tcb *tcp)
 
 	if (exiting(tcp)) {
 		if (tcp->u_arg[0] == 0)
-			tprints("NULL");
+			tprintf("NULL");
 		else if (syserror(tcp)
 		    || umove(tcp, tcp->u_arg[0], &res) < 0)
 			tprintf("%#lx", tcp->u_arg[0]);
@@ -2794,10 +2794,10 @@ sys_setxattr(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printstr(tcp, tcp->u_arg[1], -1);
 		print_xattr_val(tcp, 0, tcp->u_arg[2], tcp->u_arg[3], tcp->u_arg[3]);
-		tprints(", ");
+		tprintf(", ");
 		printflags(xattrflags, tcp->u_arg[4], "XATTR_???");
 	}
 	return 0;
@@ -2808,10 +2808,10 @@ sys_fsetxattr(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printstr(tcp, tcp->u_arg[1], -1);
 		print_xattr_val(tcp, 0, tcp->u_arg[2], tcp->u_arg[3], tcp->u_arg[3]);
-		tprints(", ");
+		tprintf(", ");
 		printflags(xattrflags, tcp->u_arg[4], "XATTR_???");
 	}
 	return 0;
@@ -2822,7 +2822,7 @@ sys_getxattr(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printstr(tcp, tcp->u_arg[1], -1);
 	} else {
 		print_xattr_val(tcp, syserror(tcp), tcp->u_arg[2], tcp->u_arg[3],
@@ -2836,7 +2836,7 @@ sys_fgetxattr(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printstr(tcp, tcp->u_arg[1], -1);
 	} else {
 		print_xattr_val(tcp, syserror(tcp), tcp->u_arg[2], tcp->u_arg[3],
@@ -2874,7 +2874,7 @@ sys_removexattr(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printpath(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printstr(tcp, tcp->u_arg[1], -1);
 	}
 	return 0;
@@ -2885,7 +2885,7 @@ sys_fremovexattr(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printstr(tcp, tcp->u_arg[1], -1);
 	}
 	return 0;
@@ -2910,7 +2910,7 @@ sys_fadvise64(struct tcb *tcp)
 	if (entering(tcp)) {
 		int argn;
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		argn = printllval(tcp, "%lld", 1);
 		tprintf(", %ld, ", tcp->u_arg[argn++]);
 		printxval(advise, tcp->u_arg[argn], "POSIX_FADV_???");
@@ -2926,7 +2926,7 @@ sys_fadvise64_64(struct tcb *tcp)
 	if (entering(tcp)) {
 		int argn;
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 #if defined ARM || defined POWERPC
 		argn = printllval(tcp, "%lld, ", 2);
 #else
@@ -2969,8 +2969,8 @@ static const struct xlat inotify_modes[] = {
 
 static const struct xlat inotify_init_flags[] = {
 	{ 0x00000800,	"IN_NONBLOCK"	},
-	{ 0x00080000,	"IN_CLOEXEC"	},
-	{ 0,		NULL		}
+	{ 0x00080000,	"IN_CLOEXEC" 	},
+	{ 0,		NULL 		}
 };
 
 int
@@ -2978,9 +2978,9 @@ sys_inotify_add_watch(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printpath(tcp, tcp->u_arg[1]);
-		tprints(", ");
+		tprintf(", ");
 		printflags(inotify_modes, tcp->u_arg[2], "IN_???");
 	}
 	return 0;
@@ -3010,7 +3010,7 @@ sys_fallocate(struct tcb *tcp)
 	if (entering(tcp)) {
 		int argn;
 		printfd(tcp, tcp->u_arg[0]);		/* fd */
-		tprints(", ");
+		tprintf(", ");
 		tprintf("%#lo, ", tcp->u_arg[1]);	/* mode */
 		argn = printllval(tcp, "%llu, ", 2);	/* offset */
 		printllval(tcp, "%llu", argn);		/* len */

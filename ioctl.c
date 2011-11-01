@@ -32,12 +32,46 @@
 
 #include "defs.h"
 
+const struct ioctlent ioctlent0[] = {
+/*
+ * `ioctlent.h' may be generated from `ioctlent.raw' by the auxiliary
+ * program `ioctlsort', such that the list is sorted by the `code' field.
+ * This has the side-effect of resolving the _IO.. macros into
+ * plain integers, eliminating the need to include here everything
+ * in "/usr/include" .
+ */
+#include "ioctlent.h"
+};
+
 #ifdef LINUX
 #include <asm/ioctl.h>
 #endif
 
+const int nioctlents0 = sizeof ioctlent0 / sizeof ioctlent0[0];
+
+#if SUPPORTED_PERSONALITIES >= 2
+const struct ioctlent ioctlent1[] = {
+#include "ioctlent1.h"
+};
+
+const int nioctlents1 = sizeof ioctlent1 / sizeof ioctlent1[0];
+#endif /* SUPPORTED_PERSONALITIES >= 2 */
+
+#if SUPPORTED_PERSONALITIES >= 3
+const struct ioctlent ioctlent2[] = {
+#include "ioctlent2.h"
+};
+
+const int nioctlents2 = sizeof ioctlent2 / sizeof ioctlent2[0];
+#endif /* SUPPORTED_PERSONALITIES >= 3 */
+
+const struct ioctlent *ioctlent;
+int nioctlents;
+
 static int
-compare(const void *a, const void *b)
+compare(a, b)
+const void *a;
+const void *b;
 {
 	unsigned long code1 = ((struct ioctlent *) a)->code;
 	unsigned long code2 = ((struct ioctlent *) b)->code;
@@ -45,7 +79,8 @@ compare(const void *a, const void *b)
 }
 
 const struct ioctlent *
-ioctl_lookup(long code)
+ioctl_lookup(code)
+long code;
 {
 	struct ioctlent *iop, ioent;
 
@@ -64,7 +99,8 @@ ioctl_lookup(long code)
 }
 
 const struct ioctlent *
-ioctl_next_match(const struct ioctlent *iop)
+ioctl_next_match(iop)
+const struct ioctlent *iop;
 {
 	long code;
 
@@ -75,7 +111,9 @@ ioctl_next_match(const struct ioctlent *iop)
 }
 
 int
-ioctl_decode(struct tcb *tcp, long code, long arg)
+ioctl_decode(tcp, code, arg)
+struct tcb *tcp;
+long code, arg;
 {
 	switch ((code >> 8) & 0xff) {
 #ifdef LINUX

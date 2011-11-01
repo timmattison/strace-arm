@@ -68,7 +68,10 @@ static const struct xlat iffflags[] = {
 
 
 static void
-print_addr(struct tcb *tcp, long addr, struct ifreq *ifr)
+print_addr(tcp, addr, ifr)
+struct tcb *tcp;
+long addr;
+struct ifreq *ifr;
 {
 	if (ifr->ifr_addr.sa_family == AF_INET) {
 		struct sockaddr_in *sinp;
@@ -92,7 +95,7 @@ sock_ioctl(struct tcb *tcp, long code, long arg)
 			    && ifc.ifc_buf == NULL)
 				tprintf(", {%d -> ", ifc.ifc_len);
 			else
-				tprints(", {");
+				tprintf(", {");
 		}
 		return 0;
 	}
@@ -188,12 +191,12 @@ sock_ioctl(struct tcb *tcp, long code, long arg)
 				printxval(addrfams,
 					  ifr.ifr_addr.sa_family,
 					  "AF_???");
-				tprints(", ");
+				tprintf(", ");
 				print_addr(tcp, ((long) tcp->u_arg[2]
-						 + offsetof(struct ifreq,
+						 + offsetof (struct ifreq,
 							     ifr_addr.sa_data)),
 					   &ifr);
-				tprints("}");
+				tprintf("}");
 				break;
 			case SIOCGIFHWADDR:
 			case SIOCSIFHWADDR:
@@ -206,7 +209,7 @@ sock_ioctl(struct tcb *tcp, long code, long arg)
 				break;
 			case SIOCGIFFLAGS:
 			case SIOCSIFFLAGS:
-				tprints("ifr_flags=");
+				tprintf("ifr_flags=");
 				printflags(iffflags, ifr.ifr_flags, "IFF_???");
 				break;
 			case SIOCGIFMETRIC:
@@ -238,19 +241,19 @@ sock_ioctl(struct tcb *tcp, long code, long arg)
 					(unsigned) ifr.ifr_map.port);
 				break;
 			}
-			tprints("}");
+			tprintf("}");
 		}
 		return 1;
 	case SIOCGIFCONF:
 		if (umove(tcp, tcp->u_arg[2], &ifc) < 0) {
-			tprints("???}");
+			tprintf("???}");
 			return 1;
 		}
 		tprintf("%d, ", ifc.ifc_len);
 		if (syserror(tcp)) {
 			tprintf("%lx", (unsigned long) ifc.ifc_buf);
 		} else if (ifc.ifc_buf == NULL) {
-			tprints("NULL");
+			tprintf("NULL");
 		} else {
 			int i;
 			unsigned nifra = ifc.ifc_len / sizeof(struct ifreq);
@@ -261,30 +264,30 @@ sock_ioctl(struct tcb *tcp, long code, long arg)
 				tprintf("%lx}", (unsigned long) ifc.ifc_buf);
 				return 1;
 			}
-			tprints("{");
+			tprintf("{");
 			for (i = 0; i < nifra; ++i ) {
 				if (i > 0)
-					tprints(", ");
+					tprintf(", ");
 				tprintf("{\"%s\", {",
 					ifra[i].ifr_name);
 				if (verbose(tcp)) {
 					printxval(addrfams,
 						  ifra[i].ifr_addr.sa_family,
 						  "AF_???");
-					tprints(", ");
+					tprintf(", ");
 					print_addr(tcp, ((long) tcp->u_arg[2]
-							 + offsetof(struct ifreq,
+							 + offsetof (struct ifreq,
 								     ifr_addr.sa_data)
 							 + ((char *) &ifra[i]
 							    - (char *) &ifra[0])),
 						   &ifra[i]);
 				} else
-					tprints("...");
-				tprints("}}");
+					tprintf("...");
+				tprintf("}}");
 			}
-			tprints("}");
+			tprintf("}");
 		}
-		tprints("}");
+		tprintf("}");
 		return 1;
 #endif
 	default:

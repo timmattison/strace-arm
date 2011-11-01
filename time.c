@@ -67,7 +67,7 @@ void
 printtv_bitness(struct tcb *tcp, long addr, enum bitness_t bitness, int special)
 {
 	if (addr == 0)
-		tprints("NULL");
+		tprintf("NULL");
 	else if (!verbose(tcp))
 		tprintf("%#lx", addr);
 	else {
@@ -81,77 +81,73 @@ printtv_bitness(struct tcb *tcp, long addr, enum bitness_t bitness, int special)
 		{
 			struct timeval32 tv;
 
-			rc = umove(tcp, addr, &tv);
-			if (rc >= 0) {
+			if ((rc = umove(tcp, addr, &tv)) >= 0) {
 				if (special && tv.tv_sec == 0 &&
 				    tv.tv_usec == UTIME_NOW)
-					tprints("UTIME_NOW");
+					tprintf("UTIME_NOW");
 				else if (special && tv.tv_sec == 0 &&
 					 tv.tv_usec == UTIME_OMIT)
-					tprints("UTIME_OMIT");
+					tprintf("UTIME_OMIT");
 				else
 					tprint_timeval32(tcp, &tv);
 			}
 		} else {
 			struct timeval tv;
 
-			rc = umove(tcp, addr, &tv);
-			if (rc >= 0) {
+			if ((rc = umove(tcp, addr, &tv)) >= 0) {
 				if (special && tv.tv_sec == 0 &&
 				    tv.tv_usec == UTIME_NOW)
-					tprints("UTIME_NOW");
+					tprintf("UTIME_NOW");
 				else if (special && tv.tv_sec == 0 &&
 					 tv.tv_usec == UTIME_OMIT)
-					tprints("UTIME_OMIT");
+					tprintf("UTIME_OMIT");
 				else
 					tprint_timeval(tcp, &tv);
 			}
 		}
 		if (rc < 0)
-			tprints("{...}");
+			tprintf("{...}");
 	}
 }
 
-char *
+void
 sprinttv(struct tcb *tcp, long addr, enum bitness_t bitness, char *buf)
 {
-	int rc;
-
 	if (addr == 0)
-		return stpcpy(buf, "NULL");
+		strcpy(buf, "NULL");
+	else if (!verbose(tcp))
+		sprintf(buf, "%#lx", addr);
+	else {
+		int rc;
 
-	if (!verbose(tcp))
-		return buf + sprintf(buf, "%#lx", addr);
-
-	if (bitness == BITNESS_32
+		if (bitness == BITNESS_32
 #if defined(LINUX) && SUPPORTED_PERSONALITIES > 1
-	    || personality_wordsize[current_personality] == 4
+		    || personality_wordsize[current_personality] == 4
 #endif
-		)
-	{
-		struct timeval32 tv;
+			)
+		{
+			struct timeval32 tv;
 
-		rc = umove(tcp, addr, &tv);
-		if (rc >= 0)
-			return buf + sprintf(buf, "{%u, %u}",
-				tv.tv_sec, tv.tv_usec);
-	} else {
-		struct timeval tv;
+			if ((rc = umove(tcp, addr, &tv)) >= 0)
+				sprintf(buf, "{%u, %u}",
+					tv.tv_sec, tv.tv_usec);
+		} else {
+			struct timeval tv;
 
-		rc = umove(tcp, addr, &tv);
-		if (rc >= 0)
-			return buf + sprintf(buf, "{%lu, %lu}",
-				(unsigned long) tv.tv_sec,
-				(unsigned long) tv.tv_usec);
+			if ((rc = umove(tcp, addr, &tv)) >= 0)
+				sprintf(buf, "{%lu, %lu}",
+					(unsigned long) tv.tv_sec,
+					(unsigned long) tv.tv_usec);
+		}
+		if (rc < 0)
+			strcpy(buf, "{...}");
 	}
-
-	return stpcpy(buf, "{...}");
 }
 
 void print_timespec(struct tcb *tcp, long addr)
 {
 	if (addr == 0)
-		tprints("NULL");
+		tprintf("NULL");
 	else if (!verbose(tcp))
 		tprintf("%#lx", addr);
 	else {
@@ -161,8 +157,7 @@ void print_timespec(struct tcb *tcp, long addr)
 		if (personality_wordsize[current_personality] == 4) {
 			struct timeval32 tv;
 
-			rc = umove(tcp, addr, &tv);
-			if (rc >= 0)
+			if ((rc = umove(tcp, addr, &tv)) >= 0)
 				tprintf("{%u, %u}",
 					tv.tv_sec, tv.tv_usec);
 		} else
@@ -170,14 +165,13 @@ void print_timespec(struct tcb *tcp, long addr)
 		{
 			struct timespec ts;
 
-			rc = umove(tcp, addr, &ts);
-			if (rc >= 0)
+			if ((rc = umove(tcp, addr, &ts)) >= 0)
 				tprintf("{%lu, %lu}",
 					(unsigned long) ts.tv_sec,
 					(unsigned long) ts.tv_nsec);
 		}
 		if (rc < 0)
-			tprints("{...}");
+			tprintf("{...}");
 	}
 }
 
@@ -194,8 +188,7 @@ void sprint_timespec(char *buf, struct tcb *tcp, long addr)
 		if (personality_wordsize[current_personality] == 4) {
 			struct timeval32 tv;
 
-			rc = umove(tcp, addr, &tv);
-			if (rc >= 0)
+			if ((rc = umove(tcp, addr, &tv)) >= 0)
 				sprintf(buf, "{%u, %u}",
 					tv.tv_sec, tv.tv_usec);
 		} else
@@ -203,8 +196,7 @@ void sprint_timespec(char *buf, struct tcb *tcp, long addr)
 		{
 			struct timespec ts;
 
-			rc = umove(tcp, addr, &ts);
-			if (rc >= 0)
+			if ((rc = umove(tcp, addr, &ts)) >= 0)
 				sprintf(buf, "{%lu, %lu}",
 					(unsigned long) ts.tv_sec,
 					(unsigned long) ts.tv_nsec);
@@ -215,7 +207,8 @@ void sprint_timespec(char *buf, struct tcb *tcp, long addr)
 }
 
 int
-sys_time(struct tcb *tcp)
+sys_time(tcp)
+struct tcb *tcp;
 {
 	if (exiting(tcp)) {
 #ifndef SVR4
@@ -226,7 +219,8 @@ sys_time(struct tcb *tcp)
 }
 
 int
-sys_stime(struct tcb *tcp)
+sys_stime(tcp)
+struct tcb *tcp;
 {
 	if (exiting(tcp)) {
 		printnum(tcp, tcp->u_arg[0], "%ld");
@@ -235,7 +229,8 @@ sys_stime(struct tcb *tcp)
 }
 
 int
-sys_gettimeofday(struct tcb *tcp)
+sys_gettimeofday(tcp)
+struct tcb *tcp;
 {
 	if (exiting(tcp)) {
 		if (syserror(tcp)) {
@@ -245,7 +240,7 @@ sys_gettimeofday(struct tcb *tcp)
 		}
 		printtv(tcp, tcp->u_arg[0]);
 #ifndef SVR4
-		tprints(", ");
+		tprintf(", ");
 		printtv(tcp, tcp->u_arg[1]);
 #endif /* !SVR4 */
 	}
@@ -255,7 +250,8 @@ sys_gettimeofday(struct tcb *tcp)
 
 #ifdef ALPHA
 int
-sys_osf_gettimeofday(struct tcb *tcp)
+sys_osf_gettimeofday(tcp)
+struct tcb *tcp;
 {
 	if (exiting(tcp)) {
 		if (syserror(tcp)) {
@@ -264,7 +260,7 @@ sys_osf_gettimeofday(struct tcb *tcp)
 		}
 		printtv_bitness(tcp, tcp->u_arg[0], BITNESS_32, 0);
 #ifndef SVR4
-		tprints(", ");
+		tprintf(", ");
 		printtv_bitness(tcp, tcp->u_arg[1], BITNESS_32, 0);
 #endif /* !SVR4 */
 	}
@@ -273,12 +269,13 @@ sys_osf_gettimeofday(struct tcb *tcp)
 #endif
 
 int
-sys_settimeofday(struct tcb *tcp)
+sys_settimeofday(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		printtv(tcp, tcp->u_arg[0]);
 #ifndef SVR4
-		tprints(", ");
+		tprintf(", ");
 		printtv(tcp, tcp->u_arg[1]);
 #endif /* !SVR4 */
 	}
@@ -287,12 +284,13 @@ sys_settimeofday(struct tcb *tcp)
 
 #ifdef ALPHA
 int
-sys_osf_settimeofday(struct tcb *tcp)
+sys_osf_settimeofday(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		printtv_bitness(tcp, tcp->u_arg[0], BITNESS_32, 0);
 #ifndef SVR4
-		tprints(", ");
+		tprintf(", ");
 		printtv_bitness(tcp, tcp->u_arg[1], BITNESS_32, 0);
 #endif /* !SVR4 */
 	}
@@ -301,11 +299,12 @@ sys_osf_settimeofday(struct tcb *tcp)
 #endif
 
 int
-sys_adjtime(struct tcb *tcp)
+sys_adjtime(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		printtv(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		if (syserror(tcp))
 			tprintf("%#lx", tcp->u_arg[1]);
@@ -320,7 +319,7 @@ sys_nanosleep(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		print_timespec(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		if (!tcp->u_arg[1] || is_restart_error(tcp))
 			print_timespec(tcp, tcp->u_arg[1]);
@@ -341,7 +340,7 @@ static void
 printitv_bitness(struct tcb *tcp, long addr, enum bitness_t bitness)
 {
 	if (addr == 0)
-		tprints("NULL");
+		tprintf("NULL");
 	else if (!verbose(tcp))
 		tprintf("%#lx", addr);
 	else {
@@ -357,28 +356,26 @@ printitv_bitness(struct tcb *tcp, long addr, enum bitness_t bitness)
 				struct timeval32 it_interval, it_value;
 			} itv;
 
-			rc = umove(tcp, addr, &itv);
-			if (rc >= 0) {
-				tprints("{it_interval=");
+			if ((rc = umove(tcp, addr, &itv)) >= 0) {
+				tprintf("{it_interval=");
 				tprint_timeval32(tcp, &itv.it_interval);
-				tprints(", it_value=");
+				tprintf(", it_value=");
 				tprint_timeval32(tcp, &itv.it_value);
-				tprints("}");
+				tprintf("}");
 			}
 		} else {
 			struct itimerval itv;
 
-			rc = umove(tcp, addr, &itv);
-			if (rc >= 0) {
-				tprints("{it_interval=");
+			if ((rc = umove(tcp, addr, &itv)) >= 0)	{
+				tprintf("{it_interval=");
 				tprint_timeval(tcp, &itv.it_interval);
-				tprints(", it_value=");
+				tprintf(", it_value=");
 				tprint_timeval(tcp, &itv.it_value);
-				tprints("}");
+				tprintf("}");
 			}
 		}
 		if (rc < 0)
-			tprints("{...}");
+			tprintf("{...}");
 	}
 }
 
@@ -386,11 +383,12 @@ printitv_bitness(struct tcb *tcp, long addr, enum bitness_t bitness)
 	printitv_bitness((tcp), (addr), BITNESS_CURRENT)
 
 int
-sys_getitimer(struct tcb *tcp)
+sys_getitimer(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		printxval(which, tcp->u_arg[0], "ITIMER_???");
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		if (syserror(tcp))
 			tprintf("%#lx", tcp->u_arg[1]);
@@ -403,11 +401,12 @@ sys_getitimer(struct tcb *tcp)
 
 #ifdef ALPHA
 int
-sys_osf_getitimer(struct tcb *tcp)
+sys_osf_getitimer(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		printxval(which, tcp->u_arg[0], "ITIMER_???");
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		if (syserror(tcp))
 			tprintf("%#lx", tcp->u_arg[1]);
@@ -419,13 +418,14 @@ sys_osf_getitimer(struct tcb *tcp)
 #endif
 
 int
-sys_setitimer(struct tcb *tcp)
+sys_setitimer(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		printxval(which, tcp->u_arg[0], "ITIMER_???");
-		tprints(", ");
+		tprintf(", ");
 		printitv(tcp, tcp->u_arg[1]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		if (syserror(tcp))
 			tprintf("%#lx", tcp->u_arg[2]);
@@ -437,13 +437,14 @@ sys_setitimer(struct tcb *tcp)
 
 #ifdef ALPHA
 int
-sys_osf_setitimer(struct tcb *tcp)
+sys_osf_setitimer(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		printxval(which, tcp->u_arg[0], "ITIMER_???");
-		tprints(", ");
+		tprintf(", ");
 		printitv_bitness(tcp, tcp->u_arg[1], BITNESS_32);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		if (syserror(tcp))
 			tprintf("%#lx", tcp->u_arg[2]);
@@ -579,7 +580,7 @@ tprint_timex32(struct tcb *tcp, long addr)
 	if (umove(tcp, addr, &tx) < 0)
 		return -1;
 
-	tprints("{modes=");
+	tprintf("{modes=");
 	printflags(adjtimex_modes, tx.modes, "ADJ_???");
 	tprintf(", offset=%d, freq=%d, maxerror=%d, ",
 		tx.offset, tx.freq, tx.maxerror);
@@ -595,7 +596,7 @@ tprint_timex32(struct tcb *tcp, long addr)
 		tx.shift, tx.stabil, tx.jitcnt);
 	tprintf(", calcnt=%d, errcnt=%d, stbcnt=%d",
 		tx.calcnt, tx.errcnt, tx.stbcnt);
-	tprints("}");
+	tprintf("}");
 	return 0;
 }
 #endif /* SUPPORTED_PERSONALITIES > 1 */
@@ -622,7 +623,7 @@ tprint_timex(struct tcb *tcp, long addr)
 	tprintf("tolerance=%ld, time=", tx.tolerance);
 	tprint_timeval(tcp, &tx.time);
 #else
-	tprints("{modes=");
+	tprintf("{modes=");
 	printflags(adjtimex_modes, tx.modes, "ADJ_???");
 	tprintf(", offset=%ld, freq=%ld, maxerror=%ld, ",
 		tx.offset, tx.freq, tx.maxerror);
@@ -639,7 +640,7 @@ tprint_timex(struct tcb *tcp, long addr)
 	tprintf(", calcnt=%ld, errcnt=%ld, stbcnt=%ld",
 		tx.calcnt, tx.errcnt, tx.stbcnt);
 #endif
-	tprints("}");
+	tprintf("}");
 	return 0;
 }
 
@@ -648,11 +649,11 @@ sys_adjtimex(struct tcb *tcp)
 {
 	if (exiting(tcp)) {
 		if (tcp->u_arg[0] == 0)
-			tprints("NULL");
+			tprintf("NULL");
 		else if (syserror(tcp) || !verbose(tcp))
 			tprintf("%#lx", tcp->u_arg[0]);
 		else if (tprint_timex(tcp, tcp->u_arg[0]) < 0)
-			tprints("{...}");
+			tprintf("{...}");
 		if (syserror(tcp))
 			return 0;
 		tcp->auxstr = xlookup(adjtimex_state, tcp->u_rval);
@@ -693,22 +694,24 @@ static const struct xlat clocknames[] = {
 };
 
 int
-sys_clock_settime(struct tcb *tcp)
+sys_clock_settime(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		printxval(clocknames, tcp->u_arg[0], "CLOCK_???");
-		tprints(", ");
+		tprintf(", ");
 		printtv(tcp, tcp->u_arg[1]);
 	}
 	return 0;
 }
 
 int
-sys_clock_gettime(struct tcb *tcp)
+sys_clock_gettime(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		printxval(clocknames, tcp->u_arg[0], "CLOCK_???");
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		if (syserror(tcp))
 			tprintf("%#lx", tcp->u_arg[1]);
@@ -719,15 +722,16 @@ sys_clock_gettime(struct tcb *tcp)
 }
 
 int
-sys_clock_nanosleep(struct tcb *tcp)
+sys_clock_nanosleep(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		printxval(clocknames, tcp->u_arg[0], "CLOCK_???");
-		tprints(", ");
+		tprintf(", ");
 		printflags(clockflags, tcp->u_arg[1], "TIMER_???");
-		tprints(", ");
+		tprintf(", ");
 		printtv(tcp, tcp->u_arg[2]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		if (syserror(tcp))
 			tprintf("%#lx", tcp->u_arg[3]);
@@ -766,7 +770,7 @@ printsigevent32(struct tcb *tcp, long arg)
 	} sev;
 
 	if (umove(tcp, arg, &sev) < 0)
-		tprints("{...}");
+		tprintf("{...}");
 	else {
 		tprintf("{%#x, ", sev.sigev_value);
 		if (sev.sigev_notify == SIGEV_SIGNAL)
@@ -774,7 +778,7 @@ printsigevent32(struct tcb *tcp, long arg)
 		else
 			tprintf("%u, ", sev.sigev_signo);
 		printxval(sigev_value, sev.sigev_notify + 1, "SIGEV_???");
-		tprints(", ");
+		tprintf(", ");
 		if (sev.sigev_notify == SIGEV_THREAD_ID)
 			tprintf("{%d}", sev.un.tid);
 		else if (sev.sigev_notify == SIGEV_THREAD)
@@ -782,8 +786,8 @@ printsigevent32(struct tcb *tcp, long arg)
 				sev.un.thread.function,
 				sev.un.thread.attribute);
 		else
-			tprints("{...}");
-		tprints("}");
+			tprintf("{...}");
+		tprintf("}");
 	}
 }
 #endif
@@ -794,13 +798,14 @@ printsigevent(struct tcb *tcp, long arg)
 	struct sigevent sev;
 
 #if SUPPORTED_PERSONALITIES > 1
-	if (personality_wordsize[current_personality] == 4) {
+	if (personality_wordsize[current_personality] == 4)
+	{
 		printsigevent32(tcp, arg);
 		return;
 	}
 #endif
-	if (umove(tcp, arg, &sev) < 0)
-		tprints("{...}");
+	if (umove (tcp, arg, &sev) < 0)
+		tprintf("{...}");
 	else {
 		tprintf("{%p, ", sev.sigev_value.sival_ptr);
 		if (sev.sigev_notify == SIGEV_SIGNAL)
@@ -808,7 +813,7 @@ printsigevent(struct tcb *tcp, long arg)
 		else
 			tprintf("%u, ", sev.sigev_signo);
 		printxval(sigev_value, sev.sigev_notify+1, "SIGEV_???");
-		tprints(", ");
+		tprintf(", ");
 		if (sev.sigev_notify == SIGEV_THREAD_ID)
 			/* _pad[0] is the _tid field which might not be
 			   present in the userlevel definition of the
@@ -818,39 +823,41 @@ printsigevent(struct tcb *tcp, long arg)
 			tprintf("{%p, %p}", sev.sigev_notify_function,
 				sev.sigev_notify_attributes);
 		else
-			tprints("{...}");
-		tprints("}");
+			tprintf("{...}");
+		tprintf("}");
 	}
 }
 
 int
-sys_timer_create(struct tcb *tcp)
+sys_timer_create(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		printxval(clocknames, tcp->u_arg[0], "CLOCK_???");
-		tprints(", ");
+		tprintf(", ");
 		printsigevent(tcp, tcp->u_arg[1]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
-		int timer_id;
+		void *p;
 
-		if (syserror(tcp) || umove(tcp, tcp->u_arg[2], &timer_id) < 0)
+		if (syserror(tcp) || umove(tcp, tcp->u_arg[2], &p) < 0)
 			tprintf("%#lx", tcp->u_arg[2]);
 		else
-			tprintf("{%d}", timer_id);
+			tprintf("{%p}", p);
 	}
 	return 0;
 }
 
 int
-sys_timer_settime(struct tcb *tcp)
+sys_timer_settime(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		tprintf("%#lx, ", tcp->u_arg[0]);
 		printflags(clockflags, tcp->u_arg[1], "TIMER_???");
-		tprints(", ");
+		tprintf(", ");
 		printitv(tcp, tcp->u_arg[2]);
-		tprints(", ");
+		tprintf(", ");
 	} else {
 		if (syserror(tcp))
 			tprintf("%#lx", tcp->u_arg[3]);
@@ -861,7 +868,8 @@ sys_timer_settime(struct tcb *tcp)
 }
 
 int
-sys_timer_gettime(struct tcb *tcp)
+sys_timer_gettime(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		tprintf("%#lx, ", tcp->u_arg[0]);
@@ -875,7 +883,9 @@ sys_timer_gettime(struct tcb *tcp)
 }
 
 static void
-print_rtc(struct tcb *tcp, const struct rtc_time *rt)
+print_rtc(tcp, rt)
+struct tcb *tcp;
+const struct rtc_time *rt;
 {
 	tprintf("{tm_sec=%d, tm_min=%d, tm_hour=%d, "
 		"tm_mday=%d, tm_mon=%d, tm_year=%d, ",
@@ -885,11 +895,14 @@ print_rtc(struct tcb *tcp, const struct rtc_time *rt)
 		tprintf("tm_wday=%d, tm_yday=%d, tm_isdst=%d}",
 			rt->tm_wday, rt->tm_yday, rt->tm_isdst);
 	else
-		tprints("...}");
+		tprintf("...}");
 }
 
 int
-rtc_ioctl(struct tcb *tcp, long code, long arg)
+rtc_ioctl(tcp, code, arg)
+struct tcb *tcp;
+long code;
+long arg;
 {
 	switch (code) {
 	case RTC_ALM_SET:
@@ -899,7 +912,7 @@ rtc_ioctl(struct tcb *tcp, long code, long arg)
 			if (umove(tcp, arg, &rt) < 0)
 				tprintf(", %#lx", arg);
 			else {
-				tprints(", ");
+				tprintf(", ");
 				print_rtc(tcp, &rt);
 			}
 		}
@@ -911,7 +924,7 @@ rtc_ioctl(struct tcb *tcp, long code, long arg)
 			if (syserror(tcp) || umove(tcp, arg, &rt) < 0)
 				tprintf(", %#lx", arg);
 			else {
-				tprints(", ");
+				tprintf(", ");
 				print_rtc(tcp, &rt);
 			}
 		}
@@ -935,7 +948,7 @@ rtc_ioctl(struct tcb *tcp, long code, long arg)
 				tprintf(", {enabled=%d, pending=%d, ",
 					wk.enabled, wk.pending);
 				print_rtc(tcp, &wk.time);
-				tprints("}");
+				tprintf("}");
 			}
 		}
 		break;
@@ -948,7 +961,7 @@ rtc_ioctl(struct tcb *tcp, long code, long arg)
 				tprintf(", {enabled=%d, pending=%d, ",
 					wk.enabled, wk.pending);
 				print_rtc(tcp, &wk.time);
-				tprints("}");
+				tprintf("}");
 			}
 		}
 		break;
@@ -970,15 +983,16 @@ static const struct xlat timerfdflags[] = {
 };
 
 int
-sys_timerfd(struct tcb *tcp)
+sys_timerfd(tcp)
+struct tcb *tcp;
 {
 	if (entering(tcp)) {
 		/* It does not matter that the kernel uses itimerspec.  */
 		tprintf("%ld, ", tcp->u_arg[0]);
 		printxval(clocknames, tcp->u_arg[1], "CLOCK_???");
-		tprints(", ");
+		tprintf(", ");
 		printflags(timerfdflags, tcp->u_arg[2], "TFD_???");
-		tprints(", ");
+		tprintf(", ");
 		printitv(tcp, tcp->u_arg[3]);
 	}
 	return 0;
@@ -989,7 +1003,7 @@ sys_timerfd_create(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printxval(clocknames, tcp->u_arg[0], "CLOCK_???");
-		tprints(", ");
+		tprintf(", ");
 		printflags(timerfdflags, tcp->u_arg[1], "TFD_???");
 	}
 	return 0;
@@ -1000,11 +1014,11 @@ sys_timerfd_settime(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printflags(timerfdflags, tcp->u_arg[1], "TFD_???");
-		tprints(", ");
+		tprintf(", ");
 		printitv(tcp, tcp->u_arg[2]);
-		tprints(", ");
+		tprintf(", ");
 		printitv(tcp, tcp->u_arg[3]);
 	}
 	return 0;
@@ -1015,7 +1029,7 @@ sys_timerfd_gettime(struct tcb *tcp)
 {
 	if (entering(tcp)) {
 		printfd(tcp, tcp->u_arg[0]);
-		tprints(", ");
+		tprintf(", ");
 		printitv(tcp, tcp->u_arg[1]);
 	}
 	return 0;

@@ -212,15 +212,15 @@ int term_ioctl(struct tcb *tcp, long code, long arg)
 		if (!verbose(tcp) || umove(tcp, arg, &tios) < 0)
 			return 0;
 		if (abbrev(tcp)) {
-			tprints(", {");
+			tprintf(", {");
 #ifndef FREEBSD
 			printxval(baud_options, tios.c_cflag & CBAUD, "B???");
 #else
 			printxval(baud_options, tios.c_ispeed, "B???");
 			if (tios.c_ispeed != tios.c_ospeed) {
-				tprints(" (in)");
+				tprintf(" (in)");
 				printxval(baud_options, tios.c_ospeed, "B???");
-				tprints(" (out)");
+				tprintf(" (out)");
 			}
 #endif
 			tprintf(" %sopost %sisig %sicanon %secho ...}",
@@ -257,7 +257,7 @@ int term_ioctl(struct tcb *tcp, long code, long arg)
 		if (!verbose(tcp) || umove(tcp, arg, &tio) < 0)
 			return 0;
 		if (abbrev(tcp)) {
-			tprints(", {");
+			tprintf(", {");
 			printxval(baud_options, tio.c_cflag & CBAUD, "B???");
 			tprintf(" %sopost %sisig %sicanon %secho ...}",
 				(tio.c_oflag & OPOST) ? "" : "-",
@@ -316,19 +316,14 @@ int term_ioctl(struct tcb *tcp, long code, long arg)
 	/* ioctls with a direct decodable arg */
 #ifdef TCXONC
 	case TCXONC:
-		tprints(", ");
+		tprintf(", ");
 		printxval(tcxonc_options, arg, "TC???");
 		return 1;
 #endif
 #ifdef TCLFLSH
 	case TCFLSH:
-		tprints(", ");
+		tprintf(", ");
 		printxval(tcflsh_options, arg, "TC???");
-		return 1;
-#endif
-#ifdef TIOCSCTTY
-	case TIOCSCTTY:
-		tprintf(", %ld", arg);
 		return 1;
 #endif
 
@@ -341,9 +336,9 @@ int term_ioctl(struct tcb *tcp, long code, long arg)
 	case TIOCMSET:
 		if (umove(tcp, arg, &i) < 0)
 			return 0;
-		tprints(", [");
+		tprintf(", [");
 		printflags(modem_flags, i, "TIOCM_???");
-		tprints("]");
+		tprintf("]");
 		return 1;
 #endif /* TIOCMGET */
 
@@ -415,7 +410,7 @@ int term_ioctl(struct tcb *tcp, long code, long arg)
 #ifdef TIOCGPTN
 	case TIOCGPTN:
 #endif
-		tprints(", ");
+		tprintf(", ");
 		printnum_int(tcp, arg, "%d");
 		return 1;
 
@@ -424,12 +419,15 @@ int term_ioctl(struct tcb *tcp, long code, long arg)
 #ifdef TIOCSTI
 	case TIOCSTI:
 #endif
-		tprints(", ");
+		tprintf(", ");
 		printstr(tcp, arg, 1);
 		return 1;
 
 	/* ioctls with no parameters */
 
+#ifdef TIOCSCTTY
+	case TIOCSCTTY:
+#endif
 #ifdef TIOCNOTTY
 	case TIOCNOTTY:
 #endif
